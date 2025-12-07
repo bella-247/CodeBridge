@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Save LeetCode → GitHub</title>
+  <style>
+    body { font-family: Arial, sans-serif; width: 380px; margin: 0; padding: 12px; box-sizing: border-box; }
+    h2 { font-size: 16px; margin: 0 0 8px 0; }
+    label { display:block; margin-top:8px; font-size:12px; color:#333; }
+    input[type="text"], input[type="password"], select, textarea {
+      width:100%; padding:6px 8px; margin-top:4px; box-sizing:border-box; font-size:13px;
+      border:1px solid #ddd; border-radius:4px;
+    }
+    textarea { min-height:80px; resize:vertical; }
+    .row { display:flex; gap:8px; }
+    .col { flex:1; }
+    button { margin-top:10px; padding:8px 10px; font-size:14px; border:none; border-radius:4px; cursor:pointer; }
+    button#detectBtn { background:#2b6cb0; color:#fff; }
+    button#saveBtn { background:#2f855a; color:#fff; width:100%; }
+    .meta { background:#f7fafc; padding:8px; border-radius:6px; margin-top:8px; font-size:13px; }
+    .small { font-size:12px; color:#666; }
+    .tag { display:inline-block; margin:2px 4px 2px 0; background:#e2e8f0; padding:2px 6px; border-radius:12px; font-size:12px; }
+    .status { margin-top:8px; font-size:13px; }
+    .muted { color:#666; font-size:12px; margin-top:6px; }
+    .flex-between { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  </style>
+</head>
+<body>
+  <h2>LeetCode → GitHub</h2>
+
+  <div class="flex-between">
+    <div class="small">Detect this page and prepare files to push</div>
+    <button id="detectBtn">Detect</button>
+  </div>
+
+  <div class="meta" id="metaBox">
+    <div><strong id="metaTitle">No problem detected</strong></div>
+    <div class="small" id="metaIdUrl"></div>
+    <div class="small" id="metaDifficulty"></div>
+    <div id="metaTags" style="margin-top:6px;"></div>
+    <div class="muted" id="metaLangExt"></div>
+  </div>
+
+  <label for="owner">GitHub owner (user/org)</label>
+  <input id="owner" type="text" placeholder="your-github-username" />
+
+  <div class="row">
+    <div class="col">
+      <label for="repo">Repository</label>
+      <input id="repo" type="text" placeholder="your-repo-name" />
+    </div>
+    <div style="width:120px;">
+      <label for="branch">Branch</label>
+      <input id="branch" type="text" value="main" />
+    </div>
+  </div>
+
+  <label for="token">Personal access token (scopes: repo)</label>
+  <input id="token" type="password" placeholder="ghp_xxx..." />
+  <label style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+    <input id="saveToken" type="checkbox" /> <span class="small">Save token locally</span>
+  </label>
+
+  <label for="notes">Notes / explanation (will go into README)</label>
+  <textarea id="notes" placeholder="Your notes about approach, complexity, caveats..."></textarea>
+
+  <label style="margin-top:6px;">
+    <input id="allowUpdate" type="checkbox" /> <span class="small">Allow overwrite if folder exists</span>
+  </label>
+
+  <button id="saveBtn">Save to GitHub</button>
+
+  <div class="status" id="status"></div>
+  <div class="muted" style="margin-top:8px;">Detected files will be saved as <code id="detectedPath">/0000-unknown/</code></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
