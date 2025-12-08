@@ -12,17 +12,21 @@
     ],
     "host_permissions": ["https://leetcode.com/*", "https://api.github.com/*"],
     "background": {
-        "service_worker": "background.js",
+        "service_worker": "src/background.js",
         "type": "module"
     },
     "action": {
-        "default_popup": "popup.html",
+        "default_popup": "src/popup.html",
         "default_title": "Save LeetCode solution to GitHub"
+    },
+    "options_ui": {
+        "page": "src/options.html",
+        "open_in_tab": true
     },
     "content_scripts": [
         {
             "matches": ["https://leetcode.com/*"],
-            "js": ["content.js"],
+            "js": ["src/content.js"],
             "run_at": "document_idle"
         }
     ],

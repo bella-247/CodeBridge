@@ -216,14 +216,179 @@ async function gatherProblemData() {
   };
 }
 
-// Expose via message listener for popup/background to request
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message && message.action === 'getProblemData') {
-    (async () => {
-      const data = await gatherProblemData();
-      sendResponse({ success: true, data });
-    })();
-    return true; // keep channel open for async response
+ // Expose via message listener for popup/background to request
+ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+   if (message && message.action === 'getProblemData') {
+     (async () => {
+       const data = await gatherProblemData();
+       sendResponse({ success: true, data });
+     })();
+     return true; // keep channel open for async response
+   }
+   // allow other messages
+ });
+
+/*
+  Auto-save (experimental)
+  - Observes the page for submission/result updates that include the word "Accepted".
+  - When autoSave is enabled (via options), the content script will automatically
+    collect problem data and ask the background service worker to upload files
+    using saved defaults (github_owner, github_repo, github_branch, github_token).
+  - This is best-effort and intentionally conservative to avoid accidental uploads.
+*/
+
+let _autoSaveEnabled = false;
+let _autoSaveDebounce = null;
+let _lastAutoSaved = null;
+
+// Check stored preference and initialize observer if enabled
+function initAutoSave() {
+  try {
+    chrome.storage.local.get(['autoSave'], (items) => {
+      _autoSaveEnabled = !!(items && items.autoSave);
+      if (_autoSaveEnabled) startSubmissionObserver();
+    });
+    // react to changes in options
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.autoSave) {
+        _autoSaveEnabled = !!changes.autoSave.newValue;
+        if (_autoSaveEnabled) startSubmissionObserver();
+      }
+    });
+  } catch (e) {
+    // storage may not be available in some contexts; fail silently
+    console.warn('Auto-save init error', e);
   }
-  // allow other messages
-});
+}
+
+let _submissionObserver = null;
+
+function startSubmissionObserver() {
+  if (_submissionObserver) return;
+  const observer = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      // quick check: if any added node contains the text 'Accepted', trigger debounce
+      for (const node of Array.from(m.addedNodes || [])) {
+        try {
+          const txt = (node.textContent || '').trim();
+          if (!txt) continue;
+          // look for the word 'Accepted' (case-insensitive) - conservative match
+          if (/\bAccepted\b/i.test(txt)) {
+            debounceAutoSave();
+            return;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      // also check for attribute changes that carry status text
+      if (m.type === 'characterData' && m.target && /\bAccepted\b/i.test(m.target.data || '')) {
+        debounceAutoSave();
+        return;
+      }
+    }
+  });
+
+  _submissionObserver = observer;
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+}
+
+// Debounce to avoid duplicate triggers
+function debounceAutoSave() {
+  if (!_autoSaveEnabled) return;
+  if (_autoSaveDebounce) return;
+  _autoSaveDebounce = setTimeout(async () => {
+    _autoSaveDebounce = null;
+    try {
+      const data = await gatherProblemData();
+      // prevent repeated uploads for same problem in quick succession
+      if (!data || !data.slug) return;
+      if (_lastAutoSaved === data.slug) return;
+      _lastAutoSaved = data.slug;
+      performAutoSave(data);
+    } catch (e) {
+      console.warn('Auto-save gather error', e);
+    }
+  }, 1500);
+}
+
+// Perform upload using stored defaults
+async function performAutoSave(problemData) {
+  try {
+    chrome.storage.local.get(['github_owner','github_repo','github_branch','github_token','allowUpdateDefault'], async (items) => {
+      const owner = items && items.github_owner;
+      const repo = items && items.github_repo;
+      const branch = (items && items.github_branch) || 'main';
+      const token = items && items.github_token;
+      const allowUpdate = !!(items && items.allowUpdateDefault);
+
+      if (!owner || !repo || !token) {
+        console.warn('Auto-save aborted: missing owner/repo/token in options');
+        return;
+      }
+
+      const folder = problemData.folderName;
+      const solutionName = `solution.${problemData.extension || 'txt'}`;
+      const solutionContent = problemData.code || '';
+      const readmeContent = (function buildReadmeInline() {
+        const title = problemData.title || '';
+        const url = problemData.url || '';
+        const tags = (problemData.tags || []).join(', ');
+        const difficulty = problemData.difficulty || '';
+        const description = (problemData.contentHtml || '').replace(/<[^>]+>/g, '').trim();
+        const lines = [];
+        lines.push(`# ${title}`);
+        lines.push('');
+        if (difficulty) lines.push(`**Difficulty:** ${difficulty}`);
+        if (tags) lines.push(`**Tags:** ${tags}`);
+        if (url) lines.push(`**URL:** ${url}`);
+        lines.push('');
+        if (description) {
+          lines.push('## Problem');
+          lines.push('');
+          lines.push(description);
+          lines.push('');
+        }
+        lines.push('---');
+        lines.push('_Generated by LeetCode → GitHub Chrome extension (auto-save)_');
+        return lines.join('\n');
+      })();
+
+      // send to background to upload
+      const payload = {
+        action: 'uploadFiles',
+        owner,
+        repo,
+        branch,
+        token,
+        folder,
+        files: [
+          { path: `${folder}/${solutionName}`, content: solutionContent, isBase64: false },
+          { path: `${folder}/README.md`, content: readmeContent, isBase64: false }
+        ],
+        allowUpdate
+      };
+
+      chrome.runtime.sendMessage(payload, (resp) => {
+        if (chrome.runtime.lastError) {
+          console.warn('Auto-save background request failed', chrome.runtime.lastError.message);
+          return;
+        }
+        if (!resp) {
+          console.warn('Auto-save: no response from background');
+          return;
+        }
+        if (resp.success) {
+          console.info('Auto-save upload succeeded', resp.message);
+        } else {
+          console.warn('Auto-save upload failed', resp.message);
+        }
+      });
+    });
+  } catch (e) {
+    console.warn('Auto-save perform error', e);
+  }
+}
+
+// Initialize auto-save observer on script load
+initAutoSave();
