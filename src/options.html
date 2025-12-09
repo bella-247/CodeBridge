@@ -6,47 +6,66 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>LeetCode → GitHub — Options</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 12px; width: 520px; }
+    body { font-family: Arial, sans-serif; margin: 12px; width: 640px; }
     label { display:block; margin-top:10px; font-size:13px; color:#111; }
-    input[type="text"], input[type="password"] { width:100%; padding:8px; box-sizing:border-box; margin-top:6px; }
+    input[type="text"] { width:100%; padding:8px; box-sizing:border-box; margin-top:6px; }
     .row { display:flex; gap:8px; }
     .col { flex:1; }
     button { margin-top:12px; padding:8px 12px; background:#2b6cb0; color:#fff; border:none; border-radius:4px; cursor:pointer; }
     .muted { color:#666; font-size:13px; margin-top:8px; }
+    .section { background:#f7fafc; padding:10px; border-radius:6px; margin-top:12px; }
+    ul { margin:8px 0 0 18px; }
   </style>
 </head>
 <body>
-  <h2>LeetCode → GitHub — Options</h2>
+  <h2>LeetCode → GitHub — Options & Instructions</h2>
 
-  <label for="owner">Default GitHub owner (user/org)</label>
-  <input id="owner" type="text" placeholder="your-github-username" />
-
-  <div class="row">
-    <div class="col">
-      <label for="repo">Default repository</label>
-      <input id="repo" type="text" placeholder="your-repo-name" />
-    </div>
-    <div style="width:150px;">
-      <label for="branch">Default branch</label>
-      <input id="branch" type="text" value="main" />
-    </div>
+  <div class="section">
+    <strong>Quick start</strong>
+    <ul>
+      <li>Open a LeetCode problem page and click the extension icon.</li>
+      <li>Click "Sign in with GitHub" and follow the displayed instructions. You will see a short code and a verification URL in the popup — copy or use the provided "Open page" button to navigate to GitHub's device verification page, then paste the code to authorize.</li>
+      <li>If you check "Remember me" before signing in, the extension saves your OAuth token locally so you won't need to sign in again on this browser.</li>
+      <li>After signing in, detect the problem and click "Save to GitHub". The extension will automatically create the repository (if missing) and upload a folder containing your solution and README.</li>
+    </ul>
   </div>
 
-  <label for="token">Personal access token (optional to save)</label>
-  <input id="token" type="password" placeholder="ghp_xxx..." />
+  <div class="section">
+    <strong>Privacy & storage</strong>
+    <ul>
+      <li>No Personal Access Tokens (PATs) are requested or stored by default.</li>
+      <li>OAuth tokens are stored only when you explicitly check "Remember me" in the popup during sign-in.</li>
+      <li>To sign out and remove any stored token use the "Sign out" button in the popup, or clear the extension storage from this page.</li>
+    </ul>
 
-  <label style="margin-top:10px;">
-    <input id="saveToken" type="checkbox" /> Save token in chrome.storage.local
-  </label>
+    <button id="clearStorageBtn">Clear extension storage (removes saved defaults and token)</button>
+    <div id="clearStatus" class="muted"></div>
+  </div>
 
-  <label style="margin-top:10px;">
-    <input id="autoSave" type="checkbox" /> Auto-save to GitHub when problem is solved (experimental)
-  </label>
+  <div class="section">
+    <strong>Defaults</strong>
+    <label for="owner">Default GitHub owner (user/org)</label>
+    <input id="owner" type="text" placeholder="your-github-username" />
 
-  <div class="muted">Auto-save will attempt to push detected solutions automatically when LeetCode signals a submission result; enable with care.</div>
+    <div class="row">
+      <div class="col">
+        <label for="repo">Default repository</label>
+        <input id="repo" type="text" placeholder="your-repo-name" />
+      </div>
+      <div style="width:150px;">
+        <label for="branch">Default branch</label>
+        <input id="branch" type="text" value="main" />
+      </div>
+    </div>
 
-  <button id="saveBtn">Save options</button>
-  <div id="status" class="muted"></div>
+    <label style="margin-top:10px;">
+      <input id="autoSave" type="checkbox" /> Auto-save to GitHub when problem is solved (experimental)
+    </label>
+    <div class="muted">Auto-save will attempt to push detected solutions automatically when LeetCode signals a successful submission; enable with care.</div>
+
+    <button id="saveBtn">Save options</button>
+    <div id="status" class="muted"></div>
+  </div>
 
   <script src="src/options.js"></script>
 </body>

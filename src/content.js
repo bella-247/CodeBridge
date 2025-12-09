@@ -1,8 +1,25 @@
-// Content script for LeetCode → GitHub Exporter
-// Responsibilities:
-// - Detect problem slug, id, title, difficulty, tags, content (description)
-// - Attempt to extract user's solution code and language from the in-page editor
-// - Respond to runtime messages (action: 'getProblemData') with gathered metadata
+ // Content script for LeetCode → GitHub Exporter
+ // Responsibilities:
+ // - Detect problem slug, id, title, difficulty, tags, content (description)
+ // - Attempt to extract user's solution code and language from the in-page editor
+ // - Respond to runtime messages (action: 'getProblemData') with gathered metadata
+ //
+ // Debug instrumentation: logs to page console and captures load/runtime errors so you can see if
+ // the content script was injected and if any runtime error prevents it from responding.
+ (function __lcgh_instrumentation() {
+   try {
+     console.log('[LC→GH] content script loaded:', location.href);
+     // capture global errors in page console for easier debugging
+     window.addEventListener('error', (e) => {
+       console.error('[LC→GH] page error:', e.message, 'at', e.filename + ':' + e.lineno + ':' + e.colno);
+     });
+     window.addEventListener('unhandledrejection', (ev) => {
+       console.error('[LC→GH] unhandledrejection:', ev.reason);
+     });
+   } catch (e) {
+     console.error('[LC→GH] instrumentation failed', e);
+   }
+ })();
 
 // Utility: get slug from URL (/problems/<slug>/...)
 function getSlugFromUrl() {
