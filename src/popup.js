@@ -263,16 +263,19 @@ function onSave() {
   const allowUpdate = $('allowUpdate').checked;
   if (!owner || !repo) { updateStatus('Please provide GitHub owner and repository.', true); return; }
 
-  // save defaults if remembered
-  const remember = !!$('rememberMe').checked;
-  if (remember) {
-    chrome.storage.local.set({ github_owner: owner, github_repo: repo, github_branch: branch, remember_me: true });
-  } else {
-    chrome.storage.local.remove(['github_owner','github_repo','github_branch','remember_me']);
+  // Persist current owner/repo/branch and language so user isn't asked again
+  const langSel = document.getElementById('language');
+  const chosenExt = (langSel && langSel.value) ? langSel.value : (lastProblemData.extension || 'txt');
+  try {
+    chrome.storage.local.set({ github_owner: owner, github_repo: repo, github_branch: branch, github_language: chosenExt }, () => {
+      console.log('[popup] saved owner/repo/branch/language to storage');
+    });
+  } catch (e) {
+    console.warn('[popup] failed to save defaults', e && e.message);
   }
 
   const folder = lastProblemData.folderName;
-  const solutionName = `solution.${lastProblemData.extension || 'txt'}`;
+  const solutionName = `solution.${chosenExt}`;
   const solutionContent = lastProblemData.code || '';
   const readmeContent = buildReadme(lastProblemData);
   const payload = { action: 'uploadFiles', owner, repo, branch, folder, files: [
@@ -283,8 +286,15 @@ function onSave() {
   chrome.runtime.sendMessage(payload, (resp) => {
     if (chrome.runtime.lastError) { updateStatus('Background request failed: ' + chrome.runtime.lastError.message, true); return; }
     if (!resp) { updateStatus('No response from background', true); return; }
-    if (resp.success) updateStatus('Upload succeeded');
-    else updateStatus('Upload failed: ' + (resp.message || 'unknown'), true);
+    if (resp.success) {
+      updateStatus('Upload succeeded');
+      // remember user choices if they checked rememberMe (separate from token)
+      if (!!$('rememberMe').checked) {
+        chrome.storage.local.set({ github_owner: owner, github_repo: repo, github_branch: branch, remember_me: true });
+      }
+    } else {
+      updateStatus('Upload failed: ' + (resp.message || 'unknown'), true);
+    }
   });
 }
 
@@ -292,14 +302,25 @@ document.addEventListener('DOMContentLoaded', () => {
   bindUI();
   // default: hide device panel until auth flow starts/shows it
   clearDeviceInfo();
-  // load defaults then check auth status
-  chrome.storage.local.get(['github_owner','github_repo','github_branch','remember_me'], (items) => {
+  // load defaults then check auth status (also restore language preference)
+  chrome.storage.local.get(['github_owner','github_repo','github_branch','remember_me','github_language'], (items) => {
     if (items) {
       if (items.github_owner) $('owner').value = items.github_owner;
       if (items.github_repo) $('repo').value = items.github_repo;
       if (items.github_branch) $('branch').value = items.github_branch;
       $('rememberMe').checked = !!items.remember_me;
+      if (items.github_language) {
+        const sel = document.getElementById('language');
+        if (sel) {
+          try { sel.value = items.github_language; sel.dataset.userSet = '1'; } catch (e) { /* ignore */ }
+        }
+      }
     }
+
+    // Try to auto-detect the problem immediately when popup opens to reduce clicks.
+    // This runs regardless of auth state and will populate metadata if the active tab is a LeetCode problem.
+    try { onDetect(); } catch (e) { console.warn('auto-detect on popup open failed', e && e.message); }
+
     chrome.runtime.sendMessage({ action: 'getAuthStatus' }, (resp) => {
       if (!resp || !resp.success || !resp.authenticated) {
         updateAuthStatus('Not signed in');
@@ -310,6 +331,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // reveal workflow UI when signed in
       document.getElementById('authPanel') && document.getElementById('authPanel').classList.add('hidden');
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.remove('hidden');
+      // auto-detect again once authenticated to ensure metadata is available
+      try { onDetect(); } catch (e) { console.warn('auto-detect after auth failed', e && e.message); }
     });
   });
 
@@ -322,6 +345,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // show workflow panel
       document.getElementById('authPanel') && document.getElementById('authPanel').classList.add('hidden');
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.remove('hidden');
+      // automatically detect problem after sign-in to prefill fields
+      try { onDetect(); } catch (e) { console.warn('auto-detect after sign-in failed', e && e.message); }
     } else if (message.action === 'deviceFlowError') {
       updateAuthStatus('Authorization error');
       updateStatus(message.message || 'Authorization error', true);

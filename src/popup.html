@@ -14,12 +14,11 @@
         <div class="card">
             <h2>CodeBridge</h2>
             <p class="muted">
-                Export your current LeetCode solution to GitHub without PATs.
-                The Device Flow will open a GitHub tab for you.
+                Save your leetcode progress on your github profile.
             </p>
 
             <div id="authPanel">
-                <h3>1 — Sign in</h3>
+                <h3>Sign in</h3>
                 <button id="signInBtn" class="secondary" style="width: 100%">
                     Sign in with GitHub
                 </button>
@@ -80,7 +79,7 @@
         </div>
 
         <div id="workflowPanel" class="card hidden">
-            <h3>2 — Detect & upload</h3>
+            <h3>Detect & upload</h3>
             <div class="input-row">
                 <div class="col">
                     <label for="owner">Owner</label>
@@ -112,6 +111,26 @@
                 </div>
             </div>
 
+            <div class="input-row" style="margin-top: 8px">
+                <div class="col">
+                    <label for="language">Language / extension</label>
+                    <select id="language">
+                        <option value="py">Python (.py)</option>
+                        <option value="js">JavaScript (.js)</option>
+                        <option value="ts">TypeScript (.ts)</option>
+                        <option value="java">Java (.java)</option>
+                        <option value="cpp">C++ (.cpp)</option>
+                        <option value="c">C (.c)</option>
+                        <option value="cs">C# (.cs)</option>
+                        <option value="go">Go (.go)</option>
+                        <option value="rs">Rust (.rs)</option>
+                        <option value="rb">Ruby (.rb)</option>
+                        <option value="php">PHP (.php)</option>
+                        <option value="txt">Other (.txt)</option>
+                    </select>
+                </div>
+            </div>
+            
             <button
                 id="detectBtn"
                 class="secondary"
