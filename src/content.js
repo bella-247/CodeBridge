@@ -562,202 +562,328 @@ initAutoSave();
     }
 })();
 
-// Create bubble and toast nodes (lazy create)
+// Create bubble and toast nodes (lazy create). Adds a small close (X) button that hides the bubble for this page session.
+// The bubble reappears on page reload and whenever onSolutionAccepted() is called.
+// This version uses Pointer Events for robust drag (mouse + touch), clamps to viewport, and persists position.
 function ensureBubble() {
     if (document.getElementById("lcgh-bubble")) return;
     try {
+        const wrapper = document.createElement("div");
+        wrapper.id = "lcgh-bubble";
+        wrapper.className = "hidden lcgh-wrapper";
+        wrapper.title = "Upload solution to GitHub";
+        wrapper.style.position = "fixed";
+        wrapper.style.right = "18px";
+        wrapper.style.bottom = "120px";
+        wrapper.style.zIndex = "2147483647";
+        wrapper.style.display = "flex";
+        wrapper.style.alignItems = "center";
+        wrapper.style.justifyContent = "center";
+        wrapper.style.width = "56px";
+        wrapper.style.height = "56px";
+        // disable default touch gestures so pointer events work reliably
+        wrapper.style.touchAction = "none";
+
         const bubble = document.createElement("div");
-        bubble.id = "lcgh-bubble";
-        bubble.className = "hidden";
-        bubble.title = "Upload solution to GitHub";
+        bubble.className = "lcgh-bubble-inner";
+        bubble.style.width = "56px";
+        bubble.style.height = "56px";
+        bubble.style.borderRadius = "50%";
+        bubble.style.background = "#127c5a";
+        bubble.style.color = "#fff";
+        bubble.style.display = "flex";
+        bubble.style.alignItems = "center";
+        bubble.style.justifyContent = "center";
+        bubble.style.boxShadow = "0 8px 20px rgba(10,20,30,0.25)";
+        bubble.style.cursor = "grab";
+        bubble.style.userSelect = "none";
+        bubble.style.touchAction = "none";
         bubble.innerHTML =
             '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L12 22" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9L12 2L19 9" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-        document.body.appendChild(bubble);
 
+        const closeBtn = document.createElement("button");
+        closeBtn.id = "lcgh-bubble-close";
+        closeBtn.title = "Hide upload bubble";
+        closeBtn.style.position = "absolute";
+        closeBtn.style.top = "6px";
+        closeBtn.style.right = "6px";
+        closeBtn.style.width = "20px";
+        closeBtn.style.height = "20px";
+        closeBtn.style.border = "none";
+        closeBtn.style.borderRadius = "50%";
+        closeBtn.style.background = "rgba(0,0,0,0.35)";
+        closeBtn.style.color = "#fff";
+        closeBtn.style.cursor = "pointer";
+        closeBtn.style.display = "flex";
+        closeBtn.style.alignItems = "center";
+        closeBtn.style.justifyContent = "center";
+        closeBtn.style.fontSize = "12px";
+        closeBtn.textContent = "×";
+
+        // toast node
         const toast = document.createElement("div");
         toast.id = "lcgh-toast";
         toast.className = "hidden";
+
+        // internal helpers for position persistence and clamping
+        const POS_KEY = "lcgh_bubble_pos";
+        function clamp(n, min, max) {
+            return Math.max(min, Math.min(max, n));
+        }
+        function savePosition(left, top, right, bottom) {
+            try {
+                const data = { left, top, right, bottom };
+                chrome.storage.local.set({ [POS_KEY]: data });
+            } catch (e) {
+                /* ignore */
+            }
+        }
+        function loadPosition(cb) {
+            try {
+                chrome.storage.local.get([POS_KEY], (items) => {
+                    cb(items && items[POS_KEY] ? items[POS_KEY] : null);
+                });
+            } catch (e) {
+                cb(null);
+            }
+        }
+
+        // apply a saved position (supports left/top or right/bottom)
+        function applySavedPosition(pos) {
+            try {
+                if (!pos) return;
+                // prefer left/top if present (explicit pixel values)
+                if (
+                    typeof pos.left === "number" &&
+                    typeof pos.top === "number"
+                ) {
+                    wrapper.style.left =
+                        clamp(pos.left, 8, window.innerWidth - 64) + "px";
+                    wrapper.style.top =
+                        clamp(pos.top, 8, window.innerHeight - 64) + "px";
+                    wrapper.style.right = "auto";
+                    wrapper.style.bottom = "auto";
+                } else if (
+                    typeof pos.right === "number" &&
+                    typeof pos.bottom === "number"
+                ) {
+                    wrapper.style.right =
+                        clamp(pos.right, 8, window.innerWidth - 64) + "px";
+                    wrapper.style.bottom =
+                        clamp(pos.bottom, 8, window.innerHeight - 64) + "px";
+                    wrapper.style.left = "auto";
+                    wrapper.style.top = "auto";
+                }
+            } catch (e) {
+                /* ignore */
+            }
+        }
+
+        // pointer-based drag logic (works for mouse and touch)
+        let pointerId = null;
+        let startX = 0,
+            startY = 0;
+        let startLeft = null,
+            startTop = null,
+            startRight = null,
+            startBottom = null;
+        let clickPrevent = false;
+
+        function onPointerDown(ev) {
+            try {
+                // ignore if clicking the close button
+                if (ev.target && ev.target.id === "lcgh-bubble-close") return;
+                // left-button or touch only
+                if (ev.pointerType === "mouse" && ev.button !== 0) return;
+                ev.preventDefault();
+                pointerId = ev.pointerId;
+                wrapper.setPointerCapture(pointerId);
+                startX = ev.clientX;
+                startY = ev.clientY;
+                const cs = window.getComputedStyle(wrapper);
+                if (cs.left && cs.left !== "auto") {
+                    startLeft = parseFloat(cs.left);
+                    startTop = parseFloat(cs.top);
+                    startRight = null;
+                    startBottom = null;
+                } else {
+                    const rect = wrapper.getBoundingClientRect();
+                    startRight =
+                        parseFloat(cs.right) || window.innerWidth - rect.right;
+                    startBottom =
+                        parseFloat(cs.bottom) ||
+                        window.innerHeight - rect.bottom;
+                    startLeft = null;
+                    startTop = null;
+                }
+                clickPrevent = false;
+            } catch (e) {
+                /* ignore */
+            }
+        }
+
+        function onPointerMove(ev) {
+            try {
+                if (pointerId === null || ev.pointerId !== pointerId) return;
+                ev.preventDefault();
+                const dx = ev.clientX - startX;
+                const dy = ev.clientY - startY;
+                // if using left/top coordinates
+                if (
+                    typeof startLeft === "number" &&
+                    typeof startTop === "number"
+                ) {
+                    const newLeft = clamp(
+                        Math.round(startLeft + dx),
+                        8,
+                        window.innerWidth - 64
+                    );
+                    const newTop = clamp(
+                        Math.round(startTop + dy),
+                        8,
+                        window.innerHeight - 64
+                    );
+                    wrapper.style.left = newLeft + "px";
+                    wrapper.style.top = newTop + "px";
+                    wrapper.style.right = "auto";
+                    wrapper.style.bottom = "auto";
+                } else {
+                    const newRight = clamp(
+                        Math.round(startRight - dx),
+                        8,
+                        window.innerWidth - 64
+                    );
+                    const newBottom = clamp(
+                        Math.round(startBottom - dy),
+                        8,
+                        window.innerHeight - 64
+                    );
+                    wrapper.style.right = newRight + "px";
+                    wrapper.style.bottom = newBottom + "px";
+                    wrapper.style.left = "auto";
+                    wrapper.style.top = "auto";
+                }
+                bubble.style.cursor = "grabbing";
+            } catch (e) {
+                /* ignore */
+            }
+        }
+
+        function onPointerUp(ev) {
+            try {
+                if (pointerId === null || ev.pointerId !== pointerId) return;
+                try {
+                    wrapper.releasePointerCapture(pointerId);
+                } catch (e) {}
+                pointerId = null;
+                // persist as left/top for stability across different pages
+                try {
+                    const rect = wrapper.getBoundingClientRect();
+                    savePosition(
+                        Math.round(rect.left),
+                        Math.round(rect.top),
+                        null,
+                        null
+                    );
+                } catch (e) {
+                    /* ignore */
+                }
+                clickPrevent = true;
+                setTimeout(() => (clickPrevent = false), 200);
+                bubble.style.cursor = "grab";
+            } catch (e) {
+                /* ignore */
+            }
+        }
+
+        // prevent click during drag
+        wrapper.addEventListener(
+            "click",
+            (e) => {
+                if (clickPrevent) {
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                    return;
+                }
+            },
+            true
+        );
+
+        // attach pointer handlers on wrapper so drag works even if inner layout changes
+        wrapper.addEventListener("pointerdown", onPointerDown, {
+            passive: false,
+        });
+        wrapper.addEventListener("pointermove", onPointerMove, {
+            passive: false,
+        });
+        wrapper.addEventListener("pointerup", onPointerUp, { passive: false });
+        wrapper.addEventListener("pointercancel", onPointerUp, {
+            passive: false,
+        });
+
+        wrapper.appendChild(bubble);
+        wrapper.appendChild(closeBtn);
+        document.body.appendChild(wrapper);
         document.body.appendChild(toast);
 
-        bubble.addEventListener("click", onBubbleClick);
-    } catch (e) {
-        console.warn("lcgh: failed to create bubble/toast", e && e.message);
-    }
-}
+        // restore saved position if any
+        loadPosition((pos) => {
+            applySavedPosition(pos);
+        });
 
-function showToast(msg, timeout = 4500) {
-    try {
-        ensureBubble();
-        const t = document.getElementById("lcgh-toast");
-        if (!t) return;
-        t.textContent = msg;
-        t.classList.remove("hidden");
-        if (t._hideTimeout) clearTimeout(t._hideTimeout);
-        t._hideTimeout = setTimeout(() => {
-            t.classList.add("hidden");
-        }, timeout);
-    } catch (e) {
-        /* ignore toast errors */
-    }
-}
+        // bubble click uploads (respect clickPrevent)
+        bubble.addEventListener("click", (e) => {
+            if (clickPrevent) return;
+            onBubbleClick();
+        });
 
-function showBubble() {
-    try {
-        ensureBubble();
-        const b = document.getElementById("lcgh-bubble");
-        if (b) b.classList.remove("hidden");
-    } catch (e) {
-        /* ignore */
-    }
-}
+        // close hides for this page session; reappears on reload or when accepted/submitted events fire
+        closeBtn.addEventListener("click", (e) => {
+            try {
+                e.stopPropagation();
+                sessionStorage.setItem("lcgh-bubble-hidden", "1");
+                wrapper.classList.add("hidden");
+                const t = document.getElementById("lcgh-toast");
+                if (t) {
+                    t.textContent =
+                        "Upload bubble hidden for this page session";
+                    t.classList.remove("hidden");
+                    if (t._hideTimeout) clearTimeout(t._hideTimeout);
+                    t._hideTimeout = setTimeout(
+                        () => t.classList.add("hidden"),
+                        3000
+                    );
+                }
+            } catch (err) {
+                /* ignore */
+            }
+        });
 
-function hideBubble() {
-    try {
-        const b = document.getElementById("lcgh-bubble");
-        if (b) b.classList.add("hidden");
-    } catch (e) {
-        /* ignore */
-    }
-}
-
-// Called when a solution is accepted (either via observer or other detection)
-async function onSolutionAccepted() {
-    try {
-        // show floating bubble so user can upload with one click
-        showBubble();
-        // Optionally, if user enabled fully automatic uploads, trigger performAutoSave path
-        chrome.storage.local.get(["autoSave", "autoSaveSilent"], (items) => {
-            if (items && items.autoSave && items.autoSaveSilent) {
-                // trigger immediate performAutoSave flow (will check stored owner/repo/token)
-                debounceAutoSave();
-                showToast("Auto-upload triggered for accepted solution");
-            } else {
-                showToast(
-                    "Solution accepted — click the bubble to upload to GitHub"
-                );
+        // update persisted position when window resizes to keep bubble inside viewport
+        window.addEventListener("resize", () => {
+            try {
+                const rect = wrapper.getBoundingClientRect();
+                const newLeft = clamp(rect.left, 8, window.innerWidth - 64);
+                const newTop = clamp(rect.top, 8, window.innerHeight - 64);
+                wrapper.style.left = newLeft + "px";
+                wrapper.style.top = newTop + "px";
+                wrapper.style.right = "auto";
+                wrapper.style.bottom = "auto";
+                // persist
+                try {
+                    savePosition(
+                        Math.round(newLeft),
+                        Math.round(newTop),
+                        null,
+                        null
+                    );
+                } catch (e) {}
+            } catch (e) {
+                /* ignore */
             }
         });
     } catch (e) {
-        console.warn("onSolutionAccepted error", e && e.message);
-    }
-}
-
-// Bubble click handler: gather data and ask background to upload
-async function onBubbleClick() {
-    try {
-        showToast("Collecting solution — preparing upload...");
-        const data = await gatherProblemData();
-        if (!data || !data.slug) {
-            showToast("Failed to collect problem data", 5000);
-            return;
-        }
-
-        // attach chosen extension if user has language preference in popup storage
-        chrome.storage.local.get(
-            [
-                "github_owner",
-                "github_repo",
-                "github_branch",
-                "github_language",
-                "allowUpdateDefault",
-            ],
-            (items) => {
-                const owner = items && items.github_owner;
-                const repo = items && items.github_repo;
-                const branch = (items && items.github_branch) || "main";
-                const chosenExt =
-                    (items && items.github_language) || data.extension || "txt";
-                const allowUpdate = !!(items && items.allowUpdateDefault);
-
-                if (!owner || !repo) {
-                    showToast(
-                        "Please configure repository in the extension popup first",
-                        7000
-                    );
-                    return;
-                }
-
-                const folder = data.folderName;
-                const solutionName = `solution.${chosenExt}`;
-                const solutionContent = data.code || "";
-                const readmeContent = (function buildReadmeInline() {
-                    const title = data.title || "";
-                    const url = data.url || "";
-                    const tags = (data.tags || []).join(", ");
-                    const difficulty = data.difficulty || "";
-                    const description = (data.contentHtml || "")
-                        .replace(/<[^>]+>/g, "")
-                        .trim();
-                    const lines = [];
-                    lines.push(`# ${title}`);
-                    lines.push("");
-                    if (difficulty) lines.push(`**Difficulty:** ${difficulty}`);
-                    if (tags) lines.push(`**Tags:** ${tags}`);
-                    if (url) lines.push(`**URL:** ${url}`);
-                    lines.push("");
-                    if (description) {
-                        lines.push("## Problem");
-                        lines.push("");
-                        lines.push(description);
-                        lines.push("");
-                    }
-                    lines.push("---");
-                    lines.push("_Generated by CodeBridge extension_");
-                    return lines.join("\n");
-                })();
-
-                // send upload request to background
-                chrome.runtime.sendMessage(
-                    {
-                        action: "uploadFiles",
-                        owner,
-                        repo,
-                        branch,
-                        folder,
-                        files: [
-                            {
-                                path: `${folder}/${solutionName}`,
-                                content: solutionContent,
-                                isBase64: false,
-                            },
-                            {
-                                path: `${folder}/README.md`,
-                                content: readmeContent,
-                                isBase64: false,
-                            },
-                        ],
-                        allowUpdate,
-                    },
-                    (resp) => {
-                        if (chrome.runtime.lastError) {
-                            showToast(
-                                "Upload failed: " +
-                                    chrome.runtime.lastError.message,
-                                7000
-                            );
-                            return;
-                        }
-                        if (!resp) {
-                            showToast("Upload failed: no response", 7000);
-                            return;
-                        }
-                        if (resp.success) {
-                            showToast("Upload succeeded");
-                            // hide bubble after successful upload
-                            hideBubble();
-                        } else {
-                            showToast(
-                                "Upload failed: " + (resp.message || "unknown"),
-                                8000
-                            );
-                        }
-                    }
-                );
-            }
-        );
-    } catch (e) {
-        console.warn("bubble click error", e && e.message);
-        showToast("Error preparing upload", 7000);
+        console.warn("lcgh: failed to create bubble/toast", e && e.message);
     }
 }
 

@@ -302,13 +302,44 @@ document.addEventListener('DOMContentLoaded', () => {
   bindUI();
   // default: hide device panel until auth flow starts/shows it
   clearDeviceInfo();
-  // load defaults then check auth status (also restore language preference)
-  chrome.storage.local.get(['github_owner','github_repo','github_branch','remember_me','github_language'], (items) => {
+
+  // helper: persist popup settings with debounce to avoid excessive writes
+  let _saveOptsTimer = null;
+  function persistPopupSettings() {
+    if (_saveOptsTimer) clearTimeout(_saveOptsTimer);
+    _saveOptsTimer = setTimeout(() => {
+      try {
+        const owner = ($('owner') && $('owner').value.trim()) || '';
+        const repo = ($('repo') && $('repo').value.trim()) || '';
+        const branch = ($('branch') && $('branch').value.trim()) || '';
+        const langSel = document.getElementById('language');
+        const lang = (langSel && langSel.value) ? langSel.value : '';
+        const remember = !!($('rememberMe') && $('rememberMe').checked);
+        const allowUpdate = !!(document.getElementById('allowUpdate') && document.getElementById('allowUpdate').checked);
+        chrome.storage.local.set({
+          github_owner: owner,
+          github_repo: repo,
+          github_branch: branch,
+          github_language: lang,
+          remember_me: remember,
+          allowUpdateDefault: allowUpdate
+        }, () => {
+          console.log('[popup] persisted settings');
+        });
+      } catch (e) { console.warn('[popup] persist failed', e && e.message); }
+    }, 250);
+  }
+
+  // load defaults then check auth status (also restore language & allowUpdate preference)
+  chrome.storage.local.get(['github_owner','github_repo','github_branch','remember_me','github_language','allowUpdateDefault'], (items) => {
     if (items) {
       if (items.github_owner) $('owner').value = items.github_owner;
       if (items.github_repo) $('repo').value = items.github_repo;
       if (items.github_branch) $('branch').value = items.github_branch;
       $('rememberMe').checked = !!items.remember_me;
+      if (typeof items.allowUpdateDefault !== 'undefined' && document.getElementById('allowUpdate')) {
+        document.getElementById('allowUpdate').checked = !!items.allowUpdateDefault;
+      }
       if (items.github_language) {
         const sel = document.getElementById('language');
         if (sel) {
@@ -316,6 +347,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     }
+
+    // attach auto-save listeners so changes persist immediately
+    try {
+      const ownerEl = $('owner'); if (ownerEl) ownerEl.addEventListener('input', persistPopupSettings);
+      const repoEl = $('repo'); if (repoEl) repoEl.addEventListener('input', persistPopupSettings);
+      const branchEl = $('branch'); if (branchEl) branchEl.addEventListener('input', persistPopupSettings);
+      const langEl = document.getElementById('language'); if (langEl) langEl.addEventListener('change', persistPopupSettings);
+      const rememberEl = $('rememberMe'); if (rememberEl) rememberEl.addEventListener('change', persistPopupSettings);
+      const allowEl = document.getElementById('allowUpdate'); if (allowEl) allowEl.addEventListener('change', persistPopupSettings);
+    } catch (e) { /* ignore */ }
 
     // Try to auto-detect the problem immediately when popup opens to reduce clicks.
     // This runs regardless of auth state and will populate metadata if the active tab is a LeetCode problem.
