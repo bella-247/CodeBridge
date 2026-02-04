@@ -94,12 +94,8 @@ function startDeviceFlow() {
   updateAuthStatus('Starting authorization...');
   updateStatus('Requesting sign-in code...');
 
-  const remember = !!$('rememberMe').checked;
-
-  // warn user if they didn't opt to persist token
-  if (!remember) {
-    updateStatus('Warning: token will NOT be saved if you close this popup. Keep it open until authorization completes or check "Remember me".', true);
-  }
+  // Always remember the token by default (no checkbox needed)
+  const remember = true;
 
   // show placeholder immediately
   showDeviceInfo({ user_code: 'Waiting…', verification_uri: '', verification_uri_complete: '' });
@@ -135,7 +131,7 @@ function startDeviceFlow() {
       const url = resp.device.verification_uri_complete || resp.device.verification_uri || '';
       if (url) {
         try {
-          chrome.tabs.create({ url, active: false }, () => {});
+          chrome.tabs.create({ url, active: false }, () => { });
         } catch (e) {
           // ignore
         }
@@ -194,7 +190,7 @@ async function onDetect() {
     const tabs = await queryActiveTab();
     if (!tabs || tabs.length === 0) throw new Error('No active tab found');
     const tabId = tabs[0].id;
-    try { await new Promise((resolve) => chrome.scripting.executeScript({ target: { tabId }, files: ['src/content.js'] }, () => resolve())); } catch (e) {}
+    try { await new Promise((resolve) => chrome.scripting.executeScript({ target: { tabId }, files: ['src/content.js'] }, () => resolve())); } catch (e) { }
     await new Promise(r => setTimeout(r, 250));
     chrome.tabs.sendMessage(tabId, { action: 'getProblemData' }, (response) => {
       if (chrome.runtime.lastError || !response || !response.success) {
@@ -278,10 +274,12 @@ function onSave() {
   const solutionName = `solution.${chosenExt}`;
   const solutionContent = lastProblemData.code || '';
   const readmeContent = buildReadme(lastProblemData);
-  const payload = { action: 'uploadFiles', owner, repo, branch, folder, files: [
-    { path: `${folder}/${solutionName}`, content: solutionContent, isBase64: false },
-    { path: `${folder}/README.md`, content: readmeContent, isBase64: false }
-  ], allowUpdate };
+  const payload = {
+    action: 'uploadFiles', owner, repo, branch, folder, files: [
+      { path: `${folder}/${solutionName}`, content: solutionContent, isBase64: false },
+      { path: `${folder}/README.md`, content: readmeContent, isBase64: false }
+    ], allowUpdate
+  };
 
   chrome.runtime.sendMessage(payload, (resp) => {
     if (chrome.runtime.lastError) { updateStatus('Background request failed: ' + chrome.runtime.lastError.message, true); return; }
@@ -314,7 +312,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const branch = ($('branch') && $('branch').value.trim()) || '';
         const langSel = document.getElementById('language');
         const lang = (langSel && langSel.value) ? langSel.value : '';
-        const remember = !!($('rememberMe') && $('rememberMe').checked);
         const allowUpdate = !!(document.getElementById('allowUpdate') && document.getElementById('allowUpdate').checked);
         const showBubble = !!(document.getElementById('showBubble') && document.getElementById('showBubble').checked);
         chrome.storage.local.set({
@@ -322,7 +319,6 @@ document.addEventListener('DOMContentLoaded', () => {
           github_repo: repo,
           github_branch: branch,
           github_language: lang,
-          remember_me: remember,
           allowUpdateDefault: allowUpdate,
           showBubble: showBubble
         }, () => {
@@ -333,17 +329,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // load defaults then check auth status (also restore language & allowUpdate preference)
-    chrome.storage.local.get(['github_owner','github_repo','github_branch','remember_me','github_language','allowUpdateDefault','showBubble'], (items) => {
+  chrome.storage.local.get(['github_owner', 'github_repo', 'github_branch', 'github_language', 'allowUpdateDefault', 'showBubble'], (items) => {
     if (items) {
       if (items.github_owner) $('owner').value = items.github_owner;
       if (items.github_repo) $('repo').value = items.github_repo;
       if (items.github_branch) $('branch').value = items.github_branch;
-      $('rememberMe').checked = !!items.remember_me;
       if (typeof items.allowUpdateDefault !== 'undefined' && document.getElementById('allowUpdate')) {
         document.getElementById('allowUpdate').checked = !!items.allowUpdateDefault;
       }
       if (typeof items.showBubble !== 'undefined' && document.getElementById('showBubble')) {
-        try { document.getElementById('showBubble').checked = !!items.showBubble; } catch (e) {}
+        try { document.getElementById('showBubble').checked = !!items.showBubble; } catch (e) { }
       }
       if (items.github_language) {
         const sel = document.getElementById('language');
@@ -359,7 +354,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const repoEl = $('repo'); if (repoEl) repoEl.addEventListener('input', persistPopupSettings);
       const branchEl = $('branch'); if (branchEl) branchEl.addEventListener('input', persistPopupSettings);
       const langEl = document.getElementById('language'); if (langEl) langEl.addEventListener('change', persistPopupSettings);
-      const rememberEl = $('rememberMe'); if (rememberEl) rememberEl.addEventListener('change', persistPopupSettings);
       const allowEl = document.getElementById('allowUpdate'); if (allowEl) allowEl.addEventListener('change', persistPopupSettings);
       const showEl = document.getElementById('showBubble'); if (showEl) showEl.addEventListener('change', persistPopupSettings);
     } catch (e) { /* ignore */ }

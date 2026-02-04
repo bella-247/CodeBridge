@@ -1,181 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta
-            http-equiv="Content-Security-Policy"
-            content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
-        />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>CodeBridge</title>
-        <link rel="stylesheet" href="styles.css">
-    </head>
-    <body>
-        <div class="card">
-            <h2>CodeBridge</h2>
-            <p class="muted">
-                Save your leetcode progress on your github profile.
-            </p>
 
-            <div id="authPanel">
-                <h3>Sign in</h3>
-                <button id="signInBtn" class="secondary" style="width: 100%">
-                    Sign in with GitHub
-                </button>
-                <button
-                    id="signOutBtn"
-                    class="primary hidden"
-                    style="width: 100%; margin-top: 6px"
-                >
-                    Sign out
-                </button>
-                <div class="inline" style="margin-top: 10px; display:flex; gap:12px; align-items:center;">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <input id="rememberMe" type="checkbox" checked />
-                        <label for="rememberMe" style="margin: 0"
-                            >Remember me (stores token locally)</label
-                        >
-                    </div>
-                    <div style="display:flex; align-items:center; gap:8px; margin-left: auto;">
-                        <input id="showBubble" type="checkbox" />
-                        <label for="showBubble" style="margin: 0"
-                            >Show upload bubble on LeetCode pages</label
-                        >
-                    </div>
-                </div>
-                <div class="status" id="authStatus" aria-live="polite">
-                    Not signed in
-                </div>
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>CodeBridge</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
 
-                <div
-                    id="deviceInfo"
-                    class="hidden"
-                    role="status"
-                    aria-live="polite"
-                >
-                    <div style="font-weight: 600">GitHub tab opened</div>
-                    <p class="muted" style="margin: 4px 0 8px">
-                        A GitHub tab opened in the background. Go to that tab,
-                        paste the code below, and accept the authorization. Keep
-                        this popup open if you like.
-                    </p>
-                    <div class="muted" style="font-size: 12px">
-                        Verification URL:
-                        <a
-                            id="deviceUrl"
-                            href="#"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        ></a>
-                    </div>
-                    <div
-                        style="
+<body>
+    <div class="card">
+        <h2>CodeBridge</h2>
+        <p class="muted">
+            Save your leetcode progress on your github profile.
+        </p>
+
+        <div id="authPanel">
+            <h3>Sign in</h3>
+            <button id="signInBtn" class="secondary" style="width: 100%">
+                Sign in with GitHub
+            </button>
+            <button id="signOutBtn" class="primary hidden" style="width: 100%; margin-top: 6px">
+                Sign out
+            </button>
+            <div class="inline" style="margin-top: 10px; display:flex; align-items:center;">
+                <input id="showBubble" type="checkbox" checked />
+                <label for="showBubble" style="margin: 0">Show upload bubble on LeetCode pages</label>
+            </div>
+            <div class="status" id="authStatus" aria-live="polite">
+                Not signed in
+            </div>
+
+            <div id="deviceInfo" class="hidden" role="status" aria-live="polite">
+                <div style="font-weight: 600">GitHub tab opened</div>
+                <p class="muted" style="margin: 4px 0 8px">
+                    A GitHub tab opened in the background. Go to that tab,
+                    paste the code below, and accept the authorization. Keep
+                    this popup open if you like.
+                </p>
+                <div class="muted" style="font-size: 12px">
+                    Verification URL:
+                    <a id="deviceUrl" href="#" target="_blank" rel="noopener noreferrer"></a>
+                </div>
+                <div style="
                             margin-top: 8px;
                             display: flex;
                             align-items: center;
                             gap: 8px;
-                        "
-                    >
-                        <span class="code" id="deviceCode">—</span>
-                        <button id="copyCodeBtn" class="secondary">Copy</button>
-                        <button id="openUrlBtn" class="primary">
-                            Open tab
-                        </button>
-                    </div>
+                        ">
+                    <span class="code" id="deviceCode">—</span>
+                    <button id="copyCodeBtn" class="secondary">Copy</button>
+                    <button id="openUrlBtn" class="primary">
+                        Open tab
+                    </button>
                 </div>
             </div>
         </div>
+    </div>
 
-        <div id="workflowPanel" class="card hidden">
-            <h3>Detect & upload</h3>
-            <div class="input-row">
-                <div class="col">
-                    <label for="owner">Owner</label>
-                    <input
-                        id="owner"
-                        type="text"
-                        placeholder="GitHub user or org"
-                    />
-                </div>
-                <div class="col">
-                    <label for="repo">Repository</label>
-                    <input
-                        id="repo"
-                        type="text"
-                        placeholder="Repository name"
-                    />
-                </div>
+    <div id="workflowPanel" class="card hidden">
+        <h3>Detect & upload</h3>
+        <div class="input-row">
+            <div class="col">
+                <label for="owner">Owner</label>
+                <input id="owner" type="text" placeholder="GitHub user or org" />
             </div>
-            <div class="input-row" style="margin-top: 4px">
-                <div class="col">
-                    <label for="branch">Branch</label>
-                    <input id="branch" type="text" value="main" />
-                </div>
-                <div class="col inline" style="justify-content: flex-end">
-                    <input id="allowUpdate" type="checkbox" />
-                    <label for="allowUpdate" style="margin: 0"
-                        >Allow overwrite</label
-                    >
-                </div>
+            <div class="col">
+                <label for="repo">Repository</label>
+                <input id="repo" type="text" placeholder="Repository name" />
             </div>
-
-            <div class="input-row" style="margin-top: 8px">
-                <div class="col">
-                    <label for="language">Language / extension</label>
-                    <select id="language">
-                        <option value="py">Python (.py)</option>
-                        <option value="js">JavaScript (.js)</option>
-                        <option value="ts">TypeScript (.ts)</option>
-                        <option value="java">Java (.java)</option>
-                        <option value="cpp">C++ (.cpp)</option>
-                        <option value="c">C (.c)</option>
-                        <option value="cs">C# (.cs)</option>
-                        <option value="go">Go (.go)</option>
-                        <option value="rs">Rust (.rs)</option>
-                        <option value="rb">Ruby (.rb)</option>
-                        <option value="php">PHP (.php)</option>
-                        <option value="txt">Other (.txt)</option>
-                    </select>
-                </div>
+        </div>
+        <div class="input-row" style="margin-top: 4px">
+            <div class="col">
+                <label for="branch">Branch</label>
+                <input id="branch" type="text" value="main" />
             </div>
-            
-            <button
-                id="detectBtn"
-                class="secondary"
-                style="width: 100%; margin-top: 10px"
-            >
-                Detect current LeetCode problem
-            </button>
-
-            <div class="meta" id="metaBox">
-                <strong id="metaTitle">No problem detected</strong>
-                <div class="muted" id="metaIdUrl"></div>
-                <div class="muted" id="metaDifficulty"></div>
-                <div id="metaTags"></div>
-                <div class="muted" id="metaLangExt"></div>
-                <div class="muted" style="margin-top: 6px">
-                    Folder:
-                    <code id="detectedPath" class="code">/0000-unknown/</code>
-                </div>
+            <div class="col inline" style="justify-content: flex-end">
+                <input id="allowUpdate" type="checkbox" />
+                <label for="allowUpdate" style="margin: 0">Allow overwrite</label>
             </div>
-
-            <button
-                id="saveBtn"
-                class="primary"
-                style="width: 100%; margin-top: 10px"
-            >
-                Save to GitHub
-            </button>
-            <div class="status" id="status"></div>
-            <a
-                id="helpLink"
-                class="link"
-                href="#"
-                style="display: inline-block; margin-top: 8px"
-                >Need help or instructions?</a
-            >
         </div>
 
-        <script src="popup.js"></script>
-    </body>
+        <div class="input-row" style="margin-top: 8px">
+            <div class="col">
+                <label for="language">Language / extension</label>
+                <select id="language">
+                    <option value="py">Python (.py)</option>
+                    <option value="js">JavaScript (.js)</option>
+                    <option value="ts">TypeScript (.ts)</option>
+                    <option value="java">Java (.java)</option>
+                    <option value="cpp">C++ (.cpp)</option>
+                    <option value="c">C (.c)</option>
+                    <option value="cs">C# (.cs)</option>
+                    <option value="go">Go (.go)</option>
+                    <option value="rs">Rust (.rs)</option>
+                    <option value="rb">Ruby (.rb)</option>
+                    <option value="php">PHP (.php)</option>
+                    <option value="txt">Other (.txt)</option>
+                </select>
+            </div>
+        </div>
+
+        <button id="detectBtn" class="secondary" style="width: 100%; margin-top: 10px">
+            Detect current LeetCode problem
+        </button>
+
+        <div class="meta" id="metaBox">
+            <strong id="metaTitle">No problem detected</strong>
+            <div class="muted" id="metaIdUrl"></div>
+            <div class="muted" id="metaDifficulty"></div>
+            <div id="metaTags"></div>
+            <div class="muted" id="metaLangExt"></div>
+            <div class="muted" style="margin-top: 6px">
+                Folder:
+                <code id="detectedPath" class="code">/0000-unknown/</code>
+            </div>
+        </div>
+
+        <button id="saveBtn" class="primary" style="width: 100%; margin-top: 10px">
+            Save to GitHub
+        </button>
+        <div class="status" id="status"></div>
+        <a id="helpLink" class="link" href="#" style="display: inline-block; margin-top: 8px">Need help or
+            instructions?</a>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
 </html>

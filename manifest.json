@@ -18,7 +18,7 @@
     "https://api.github.com/*"
   ],
   "background": {
-    "service_worker": "src/background.js",
+    "service_worker": "src/background/index.js",
     "type": "module"
   },
   "action": {
@@ -31,15 +31,23 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://leetcode.com/*"],
-      "js": ["src/content.js"],
+      "matches": [
+        "https://leetcode.com/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/bridge.js"],
-      "matches": ["https://leetcode.com/*"]
+      "resources": [
+        "src/bridge.js"
+      ],
+      "matches": [
+        "https://leetcode.com/*"
+      ]
     }
   ],
   "icons": {
