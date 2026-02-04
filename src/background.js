@@ -414,25 +414,72 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         folder,
                         allowUpdate,
                     });
+                    // Notify via system notification
                     if (res.success) {
                         notify("LeetCode → GitHub", res.message);
-                        sendResponse({
-                            success: true,
-                            message: res.message,
-                            results: res.results,
-                        });
                     } else {
-                        notify(
-                            "LeetCode → GitHub",
-                            "Upload failed: " + res.message
-                        );
-                        sendResponse({ success: false, message: res.message });
+                        notify("LeetCode → GitHub", "Upload failed: " + res.message);
                     }
-                } catch (err) {
+
+                    // Send response back to caller
                     sendResponse({
-                        success: false,
-                        message: err.message || String(err),
+                        success: !!res.success,
+                        message: res.message,
+                        results: res.results,
                     });
+
+                    // Additionally: inform the active tab (if any) so the content script can show an in-page toast.
+                    try {
+                        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                            try {
+                                const tabId = tabs && tabs[0] && tabs[0].id;
+                                if (!tabId) return;
+                                chrome.tabs.sendMessage(
+                                    tabId,
+                                    {
+                                        action: "showUploadToast",
+                                        success: !!res.success,
+                                        message: res.message || (res && res.results ? "Uploaded" : "Upload completed"),
+                                    },
+                                    () => {
+                                        if (chrome.runtime.lastError) {
+                                            log("sendMessage to tab failed:", chrome.runtime.lastError.message);
+                                        } else {
+                                            log("sent showUploadToast to tab", tabId);
+                                        }
+                                    }
+                                );
+                            } catch (e) {
+                                log("tabs.query/sendMessage inner error", e && e.message);
+                            }
+                        });
+                    } catch (e) {
+                        log("failed to notify tab about upload", e && e.message);
+                    }
+
+                } catch (err) {
+                    // Ensure we also try to notify the active tab about the failure
+                    try {
+                        sendResponse({
+                            success: false,
+                            message: err.message || String(err),
+                        });
+                        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                            try {
+                                const tabId = tabs && tabs[0] && tabs[0].id;
+                                if (!tabId) return;
+                                chrome.tabs.sendMessage(
+                                    tabId,
+                                    {
+                                        action: "showUploadToast",
+                                        success: false,
+                                        message: err.message || String(err),
+                                    },
+                                    () => {}
+                                );
+                            } catch (ee) { /* ignore */ }
+                        });
+                    } catch (ee) { /* ignore */ }
                 }
                 return;
             }

@@ -316,13 +316,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const lang = (langSel && langSel.value) ? langSel.value : '';
         const remember = !!($('rememberMe') && $('rememberMe').checked);
         const allowUpdate = !!(document.getElementById('allowUpdate') && document.getElementById('allowUpdate').checked);
+        const showBubble = !!(document.getElementById('showBubble') && document.getElementById('showBubble').checked);
         chrome.storage.local.set({
           github_owner: owner,
           github_repo: repo,
           github_branch: branch,
           github_language: lang,
           remember_me: remember,
-          allowUpdateDefault: allowUpdate
+          allowUpdateDefault: allowUpdate,
+          showBubble: showBubble
         }, () => {
           console.log('[popup] persisted settings');
         });
@@ -331,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // load defaults then check auth status (also restore language & allowUpdate preference)
-  chrome.storage.local.get(['github_owner','github_repo','github_branch','remember_me','github_language','allowUpdateDefault'], (items) => {
+    chrome.storage.local.get(['github_owner','github_repo','github_branch','remember_me','github_language','allowUpdateDefault','showBubble'], (items) => {
     if (items) {
       if (items.github_owner) $('owner').value = items.github_owner;
       if (items.github_repo) $('repo').value = items.github_repo;
@@ -339,6 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
       $('rememberMe').checked = !!items.remember_me;
       if (typeof items.allowUpdateDefault !== 'undefined' && document.getElementById('allowUpdate')) {
         document.getElementById('allowUpdate').checked = !!items.allowUpdateDefault;
+      }
+      if (typeof items.showBubble !== 'undefined' && document.getElementById('showBubble')) {
+        try { document.getElementById('showBubble').checked = !!items.showBubble; } catch (e) {}
       }
       if (items.github_language) {
         const sel = document.getElementById('language');
@@ -356,6 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const langEl = document.getElementById('language'); if (langEl) langEl.addEventListener('change', persistPopupSettings);
       const rememberEl = $('rememberMe'); if (rememberEl) rememberEl.addEventListener('change', persistPopupSettings);
       const allowEl = document.getElementById('allowUpdate'); if (allowEl) allowEl.addEventListener('change', persistPopupSettings);
+      const showEl = document.getElementById('showBubble'); if (showEl) showEl.addEventListener('change', persistPopupSettings);
     } catch (e) { /* ignore */ }
 
     // Try to auto-detect the problem immediately when popup opens to reduce clicks.

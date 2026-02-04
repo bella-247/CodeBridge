@@ -29,11 +29,19 @@
                 >
                     Sign out
                 </button>
-                <div class="inline" style="margin-top: 10px">
-                    <input id="rememberMe" type="checkbox" checked />
-                    <label for="rememberMe" style="margin: 0"
-                        >Remember me (stores token locally)</label
-                    >
+                <div class="inline" style="margin-top: 10px; display:flex; gap:12px; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input id="rememberMe" type="checkbox" checked />
+                        <label for="rememberMe" style="margin: 0"
+                            >Remember me (stores token locally)</label
+                        >
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; margin-left: auto;">
+                        <input id="showBubble" type="checkbox" />
+                        <label for="showBubble" style="margin: 0"
+                            >Show upload bubble on LeetCode pages</label
+                        >
+                    </div>
                 </div>
                 <div class="status" id="authStatus" aria-live="polite">
                     Not signed in

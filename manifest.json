@@ -36,6 +36,12 @@
       "run_at": "document_idle"
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/bridge.js"],
+      "matches": ["https://leetcode.com/*"]
+    }
+  ],
   "icons": {
     "16": "icons/icon.png",
     "48": "icons/icon.png",

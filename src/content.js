@@ -687,7 +687,16 @@ function ensureBubble() {
             startTop = null,
             startRight = null,
             startBottom = null;
+        // clickPrevent blocks click after a drag; moved tracks whether pointer moved enough to be considered a drag
         let clickPrevent = false;
+        let moved = false;
+        // prevent concurrent uploads
+        let isProcessing = false;
+        // how many pixels movement counts as a drag (increase to avoid false positives)
+        const MOVE_THRESHOLD = 8;
+        // synthetic click helpers to ensure taps trigger upload even when native click is suppressed
+        let lastSyntheticClickAt = 0;
+        let lastClickAt = 0;
 
         function onPointerDown(ev) {
             try {
@@ -695,11 +704,16 @@ function ensureBubble() {
                 if (ev.target && ev.target.id === "lcgh-bubble-close") return;
                 // left-button or touch only
                 if (ev.pointerType === "mouse" && ev.button !== 0) return;
-                ev.preventDefault();
+                // Avoid calling preventDefault() here — allow click events to fire.
                 pointerId = ev.pointerId;
-                wrapper.setPointerCapture(pointerId);
+                try {
+                    wrapper.setPointerCapture &&
+                        wrapper.setPointerCapture(pointerId);
+                } catch (e) {}
                 startX = ev.clientX;
                 startY = ev.clientY;
+                // reset moved flag at start of interaction
+                moved = false;
                 const cs = window.getComputedStyle(wrapper);
                 if (cs.left && cs.left !== "auto") {
                     startLeft = parseFloat(cs.left);
@@ -716,6 +730,7 @@ function ensureBubble() {
                     startLeft = null;
                     startTop = null;
                 }
+                // do not set clickPrevent here; it will be set on up only if movement occurred
                 clickPrevent = false;
             } catch (e) {
                 /* ignore */
@@ -728,6 +743,9 @@ function ensureBubble() {
                 ev.preventDefault();
                 const dx = ev.clientX - startX;
                 const dy = ev.clientY - startY;
+                // mark as moved if user dragged beyond small threshold
+                if (!moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4))
+                    moved = true;
                 // if using left/top coordinates
                 if (
                     typeof startLeft === "number" &&
@@ -763,7 +781,7 @@ function ensureBubble() {
                     wrapper.style.left = "auto";
                     wrapper.style.top = "auto";
                 }
-                bubble.style.cursor = "grabbing";
+                if (moved) bubble.style.cursor = "grabbing";
             } catch (e) {
                 /* ignore */
             }
@@ -788,8 +806,13 @@ function ensureBubble() {
                 } catch (e) {
                     /* ignore */
                 }
-                clickPrevent = true;
-                setTimeout(() => (clickPrevent = false), 200);
+                // only prevent click if we actually moved during the interaction
+                clickPrevent = !!moved;
+                // reset moved shortly after to allow subsequent clicks
+                setTimeout(() => {
+                    clickPrevent = false;
+                    moved = false;
+                }, 200);
                 bubble.style.cursor = "grab";
             } catch (e) {
                 /* ignore */
@@ -916,3 +939,447 @@ function ensureBubble() {
 })();
 
 // End of enhancements
+//
+// Provide: onBubbleClick (perform in-page upload) and runtime-controlled bubble visibility.
+// - onBubbleClick will gather problem data and call background 'uploadFiles' automatically.
+// - Respect chrome.storage.local.showBubble setting to show/hide the bubble.
+// - Listen for storage changes so the popup setting takes effect immediately.
+//
+// Extra: listen for background messages (showUploadToast) and window.postMessage fallback
+// Also attach a drag fallback to any injected bubble that may not have pointer handlers.
+(function setupBubbleActionsAndFallback() {
+    // Helper: minimal in-page toast used when showToast helper not present
+    function minimalToast(message, success) {
+        try {
+            let t = document.getElementById("lcgh-toast");
+            if (!t) {
+                t = document.createElement("div");
+                t.id = "lcgh-toast";
+                document.body.appendChild(t);
+            }
+            t.textContent = message;
+            t.style.position = "fixed";
+            t.style.right = "18px";
+            t.style.bottom = "190px";
+            t.style.background = success
+                ? "rgba(16,185,129,0.95)"
+                : "rgba(203,36,42,0.95)";
+            t.style.color = "#fff";
+            t.style.padding = "10px 14px";
+            t.style.borderRadius = "8px";
+            t.style.zIndex = 2147483651;
+            t.style.boxShadow = "0 8px 20px rgba(2,6,23,0.45)";
+            t.style.maxWidth = "420px";
+            t.style.fontSize = "13px";
+            t.style.display = "block";
+            if (t._hideTimeout) clearTimeout(t._hideTimeout);
+            t._hideTimeout = setTimeout(() => (t.style.display = "none"), 6000);
+        } catch (e) {
+            /* ignore */
+        }
+    }
+
+    // Build a README from problem data (simple version)
+    function buildReadme(problemData) {
+        try {
+            const title = problemData.title || "";
+            const url = problemData.url || "";
+            const tags = (problemData.tags || []).join(", ");
+            const difficulty = problemData.difficulty || "";
+            const description = (problemData.contentHtml || "")
+                .replace(/<[^>]+>/g, "")
+                .trim();
+            const lines = [];
+            lines.push(`# ${title}`);
+            lines.push("");
+            if (difficulty) lines.push(`**Difficulty:** ${difficulty}`);
+            if (tags) lines.push(`**Tags:** ${tags}`);
+            if (url) lines.push(`**URL:** ${url}`);
+            lines.push("");
+            if (description) {
+                lines.push("## Problem");
+                lines.push("");
+                lines.push(description);
+                lines.push("");
+            }
+            lines.push("---");
+            lines.push("_Generated by LeetCode → GitHub Chrome extension_");
+            return lines.join("\n");
+        } catch (e) {
+            return `# ${problemData.title || "Problem"}\n\n${
+                problemData.url || ""
+            }`;
+        }
+    }
+
+    // Main click handler invoked when bubble is clicked
+    async function onBubbleClick() {
+        // avoid concurrent runs
+        if (isProcessing) {
+            try { console.log("lcgh: onBubbleClick ignored — already processing"); } catch (e) {}
+            return;
+        }
+        isProcessing = true;
+        // notify page bridge of processing state
+        try { window.postMessage && window.postMessage({ lcghSetProcessing: true }, '*'); } catch (e) {}
+        // show spinner UI immediately
+        try {
+            const wrapperEl = document.getElementById("lcgh-bubble");
+            const innerEl = wrapperEl && wrapperEl.querySelector(".lcgh-bubble-inner");
+            if (wrapperEl) wrapperEl.classList.add("lcgh-loading");
+            if (innerEl && !innerEl._prevHTML) {
+                innerEl._prevHTML = innerEl.innerHTML;
+                innerEl.innerHTML = '<div class="lcgh-spinner"></div>';
+            }
+        } catch (e) { /* ignore UI errors */ }
+
+        try {
+            console.log("lcgh: onBubbleClick invoked");
+            const data = await gatherProblemData();
+            if (!data || !data.slug) {
+                minimalToast("No problem detected on this page", false);
+                return;
+            }
+
+            const items = await new Promise((resolve) => {
+                try {
+                    chrome.storage.local.get(
+                        [
+                            "github_owner",
+                            "github_repo",
+                            "github_branch",
+                            "github_language",
+                            "allowUpdateDefault",
+                            "showBubble",
+                        ],
+                        (res) => resolve(res || {})
+                    );
+                } catch (e) {
+                    resolve({});
+                }
+            });
+
+            const owner = (items && items.github_owner) || null;
+            const repo = (items && items.github_repo) || null;
+            const branch = (items && items.github_branch) || "main";
+            const chosenExt = (items && items.github_language) || data.extension || "txt";
+            const allowUpdate = !!(items && items.allowUpdateDefault);
+
+            if (!owner || !repo) {
+                minimalToast("Missing owner/repo in extension settings. Open popup to set them.", false);
+                return;
+            }
+
+            const folder = data.folderName;
+            const solutionName = `solution.${chosenExt}`;
+            const solutionContent = data.code || "";
+            const readmeContent = buildReadme(data);
+
+            try {
+                if (typeof showToast === "function") showToast("Uploading solution to GitHub…", 0);
+                else minimalToast("Uploading solution to GitHub…", true);
+            } catch (e) { /* ignore */ }
+
+            const payload = {
+                action: "uploadFiles",
+                owner,
+                repo,
+                branch,
+                folder,
+                files: [
+                    { path: `${folder}/${solutionName}`, content: solutionContent, isBase64: false },
+                    { path: `${folder}/README.md`, content: readmeContent, isBase64: false }
+                ],
+                allowUpdate,
+            };
+
+            const result = await new Promise((resolve) => {
+                chrome.runtime.sendMessage(payload, (resp) => {
+                    resolve({ resp, lastErr: chrome.runtime.lastError });
+                });
+            });
+
+            const { resp, lastErr } = result || {};
+            if (lastErr) {
+                minimalToast("Upload failed: " + (lastErr && lastErr.message), false);
+            } else if (!resp) {
+                minimalToast("Upload failed: no response from background", false);
+            } else if (resp.success) {
+                minimalToast("Upload succeeded", true);
+            } else {
+                minimalToast("Upload failed: " + (resp.message || "unknown"), false);
+            }
+        } catch (e) {
+            try { minimalToast("Upload error: " + (e && e.message), false); } catch (ex) {}
+        } finally {
+            // restore UI and processing state
+            try {
+                const wrapperEl = document.getElementById("lcgh-bubble");
+                const innerEl = wrapperEl && wrapperEl.querySelector(".lcgh-bubble-inner");
+                if (wrapperEl) wrapperEl.classList.remove("lcgh-loading");
+                if (innerEl && innerEl._prevHTML) { innerEl.innerHTML = innerEl._prevHTML; innerEl._prevHTML = null; }
+            } catch (e) {}
+            try { window.postMessage && window.postMessage({ lcghSetProcessing: false }, '*'); } catch (e) {}
+            try { isProcessing = false; } catch (e) {}
+        }
+    }
+
+    // Inject a page-level bridge script (external file) so page scripts can call window.onBubbleClick().
+    try {
+        const _script = document.createElement('script');
+        _script.src = chrome.runtime.getURL('src/bridge.js');
+        _script.onload = function () {
+            try { this.parentNode && this.parentNode.removeChild(this); } catch (e) {}
+        };
+        (document.documentElement || document.head || document.body).appendChild(_script);
+    } catch (e) {}
+
+    // Respect showBubble setting: hide bubble if disabled
+    function applyShowBubbleSetting(val) {
+        try {
+            const wrapper = document.getElementById("lcgh-bubble");
+            if (!wrapper) return;
+            if (val === false || val === "false" || val === 0) {
+                wrapper.classList.add("hidden");
+            } else {
+                wrapper.classList.remove("hidden");
+            }
+        } catch (e) {}
+    }
+    // load current setting
+    try {
+        chrome.storage.local.get(["showBubble"], (items) => {
+            applyShowBubbleSetting(
+                items && typeof items.showBubble !== "undefined"
+                    ? items.showBubble
+                    : true
+            );
+        });
+    } catch (e) {}
+    // listen for changes
+    try {
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area !== "local") return;
+            if (changes.showBubble) {
+                applyShowBubbleSetting(changes.showBubble.newValue);
+            }
+        });
+    } catch (e) {}
+})();
+
+// inject spinner CSS for loading state
+(function injectSpinnerStyles() {
+    try {
+        const css = `.lcgh-spinner{width:22px;height:22px;border:3px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:lcgh-spin 1s linear infinite}.lcgh-loading .lcgh-bubble-inner{opacity:0.95}.lcgh-bubble-inner .lcgh-spinner{display:block;margin:0 auto}@keyframes lcgh-spin{to{transform:rotate(360deg)}}`;
+        const s = document.createElement("style");
+        s.id = "lcgh-spinner-styles";
+        s.textContent = css;
+        document.head && document.head.appendChild(s);
+    } catch (e) {}
+})();
+
+(function fallbackToastAndDrag() {
+    try {
+        // Show upload toast from background
+        chrome.runtime.onMessage.addListener((msg) => {
+            try {
+                if (!msg || msg.action !== "showUploadToast") return;
+                const success = !!msg.success;
+                const message =
+                    msg.message ||
+                    (success ? "Upload succeeded" : "Upload failed");
+                // Use existing showToast if available
+                try {
+                    // adjust toast color for success/failure
+                    const t = document.getElementById("lcgh-toast");
+                    if (t) {
+                        t.style.background = success
+                            ? "rgba(16,185,129,0.95)"
+                            : "rgba(203,36,42,0.95)";
+                    }
+                    showToast(message, 6000);
+                } catch (e) {
+                    // fallback minimal toast
+                    try {
+                        let t = document.getElementById("lcgh-toast");
+                        if (!t) {
+                            t = document.createElement("div");
+                            t.id = "lcgh-toast";
+                            document.body.appendChild(t);
+                        }
+                        t.textContent = message;
+                        t.style.position = "fixed";
+                        t.style.right = "18px";
+                        t.style.bottom = "190px";
+                        t.style.background = success
+                            ? "rgba(16,185,129,0.95)"
+                            : "rgba(203,36,42,0.95)";
+                        t.style.color = "#fff";
+                        t.style.padding = "10px 14px";
+                        t.style.borderRadius = "8px";
+                        t.style.zIndex = 2147483651;
+                        t.style.boxShadow = "0 8px 20px rgba(2,6,23,0.45)";
+                        t.style.maxWidth = "420px";
+                        t.style.fontSize = "13px";
+                        t.style.display = "block";
+                        if (t._hideTimeout) clearTimeout(t._hideTimeout);
+                        t._hideTimeout = setTimeout(
+                            () => (t.style.display = "none"),
+                            6000
+                        );
+                    } catch (ex) {
+                        /* ignore toast failures */
+                    }
+                }
+            } catch (e) {
+                /* ignore message handler errors */
+            }
+        });
+
+        // Accept postMessage from fallback bubble injected by background fallback
+        window.addEventListener("message", (ev) => {
+            try {
+                const d = ev && ev.data;
+                if (!d || d.lcghAction !== "bubbleClicked") return;
+                // attempt to use existing onBubbleClick if present
+                if (typeof onBubbleClick === "function") {
+                    try {
+                        onBubbleClick();
+                    } catch (e) {
+                        /* ignore */
+                    }
+                } else {
+                    // no-op
+                    console.log(
+                        "lcgh: bubbleClicked received but onBubbleClick not available"
+                    );
+                }
+            } catch (e) {
+                /* ignore */
+            }
+        });
+
+        // Attach drag handlers to an existing bubble if it was injected without handlers
+        function attachDragToExistingBubble() {
+            try {
+                const wrapper = document.getElementById("lcgh-bubble");
+                if (!wrapper) return;
+                // avoid re-attaching
+                if (wrapper.dataset.lcghDragAttached === "1") return;
+                // simple pointer-based drag that updates left/top and persists to chrome.storage.local
+                let pid = null;
+                let sx = 0,
+                    sy = 0,
+                    startLeft = null,
+                    startTop = null;
+                const POS_KEY = "lcgh_bubble_pos";
+                function clamp(n, min, max) {
+                    return Math.max(min, Math.min(max, n));
+                }
+                function savePos(left, top) {
+                    try {
+                        chrome.storage.local.set({
+                            [POS_KEY]: {
+                                left: Math.round(left),
+                                top: Math.round(top),
+                            },
+                        });
+                    } catch (e) {}
+                }
+                function onDown(ev) {
+                    try {
+                        if (
+                            ev.target &&
+                            ev.target.classList &&
+                            ev.target.classList.contains &&
+                            ev.target.classList.contains("lcgh-close")
+                        )
+                            return;
+                        if (ev.pointerType === "mouse" && ev.button !== 0)
+                            return;
+                        ev.preventDefault();
+                        pid = ev.pointerId;
+                        wrapper.setPointerCapture &&
+                            wrapper.setPointerCapture(pid);
+                        sx = ev.clientX;
+                        sy = ev.clientY;
+                        const cs = window.getComputedStyle(wrapper);
+                        if (cs.left && cs.left !== "auto") {
+                            startLeft = parseFloat(cs.left);
+                            startTop = parseFloat(cs.top);
+                        } else {
+                            const r = wrapper.getBoundingClientRect();
+                            startLeft = r.left;
+                            startTop = r.top;
+                            wrapper.style.left = startLeft + "px";
+                            wrapper.style.top = startTop + "px";
+                            wrapper.style.right = "auto";
+                            wrapper.style.bottom = "auto";
+                        }
+                        wrapper.style.touchAction = "none";
+                        wrapper.style.cursor = "grabbing";
+                    } catch (e) {}
+                }
+                function onMove(ev) {
+                    try {
+                        if (pid === null || ev.pointerId !== pid) return;
+                        ev.preventDefault();
+                        const dx = ev.clientX - sx;
+                        const dy = ev.clientY - sy;
+                        const newLeft = clamp(
+                            Math.round(startLeft + dx),
+                            8,
+                            window.innerWidth - 64
+                        );
+                        const newTop = clamp(
+                            Math.round(startTop + dy),
+                            8,
+                            window.innerHeight - 64
+                        );
+                        wrapper.style.left = newLeft + "px";
+                        wrapper.style.top = newTop + "px";
+                    } catch (e) {}
+                }
+                function onUp(ev) {
+                    try {
+                        if (pid === null || ev.pointerId !== pid) return;
+                        try {
+                            wrapper.releasePointerCapture &&
+                                wrapper.releasePointerCapture(pid);
+                        } catch (e) {}
+                        pid = null;
+                        wrapper.style.cursor = "grab";
+                        const rect = wrapper.getBoundingClientRect();
+                        savePos(rect.left, rect.top);
+                    } catch (e) {}
+                }
+                wrapper.addEventListener("pointerdown", onDown, {
+                    passive: false,
+                });
+                wrapper.addEventListener("pointermove", onMove, {
+                    passive: false,
+                });
+                wrapper.addEventListener("pointerup", onUp, { passive: false });
+                wrapper.addEventListener("pointercancel", onUp, {
+                    passive: false,
+                });
+                wrapper.dataset.lcghDragAttached = "1";
+            } catch (e) {
+                /* ignore attachment failures */
+            }
+        }
+
+        // run once now and also when DOM changes to catch injected fallback
+        attachDragToExistingBubble();
+        const mo = new MutationObserver(() => {
+            attachDragToExistingBubble();
+        });
+        mo.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: false,
+        });
+    } catch (e) {
+        /* ignore overall failure */
+    }
+})();
