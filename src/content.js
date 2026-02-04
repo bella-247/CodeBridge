@@ -413,6 +413,7 @@ async function performAutoSave(problemData) {
                 "github_repo",
                 "github_branch",
                 "github_token",
+                "github_file_structure",
                 "allowUpdateDefault",
             ],
             async (items) => {
@@ -420,6 +421,7 @@ async function performAutoSave(problemData) {
                 const repo = items && items.github_repo;
                 const branch = (items && items.github_branch) || "main";
                 const token = items && items.github_token;
+                const fileOrg = (items && items.github_file_structure) || "folder";
                 const allowUpdate = !!(items && items.allowUpdateDefault);
 
                 if (!owner || !repo || !token) {
@@ -429,10 +431,10 @@ async function performAutoSave(problemData) {
                     return;
                 }
 
-                const folder = problemData.folderName;
-                const solutionName = `solution.${problemData.extension || "txt"
-                    }`;
+                const folderName = problemData.folderName;
+                const extension = problemData.extension || "txt";
                 const solutionContent = problemData.code || "";
+
                 const readmeContent = (function buildReadmeInline() {
                     const title = problemData.title || "";
                     const url = problemData.url || "";
@@ -461,6 +463,21 @@ async function performAutoSave(problemData) {
                     return lines.join("\n");
                 })();
 
+                let uploadFiles = [];
+                if (fileOrg === 'flat') {
+                    // Flat: 0001-two-sum.py
+                    uploadFiles = [
+                        { path: `${folderName}.${extension}`, content: solutionContent, isBase64: false },
+                        { path: `${folderName}.md`, content: readmeContent, isBase64: false }
+                    ];
+                } else {
+                    // Folder: 0001-two-sum/solution.py
+                    uploadFiles = [
+                        { path: `${folderName}/solution.${extension}`, content: solutionContent, isBase64: false },
+                        { path: `${folderName}/README.md`, content: readmeContent, isBase64: false }
+                    ];
+                }
+
                 // send to background to upload
                 const payload = {
                     action: "uploadFiles",
@@ -468,19 +485,8 @@ async function performAutoSave(problemData) {
                     repo,
                     branch,
                     token,
-                    folder,
-                    files: [
-                        {
-                            path: `${folder}/${solutionName}`,
-                            content: solutionContent,
-                            isBase64: false,
-                        },
-                        {
-                            path: `${folder}/README.md`,
-                            content: readmeContent,
-                            isBase64: false,
-                        },
-                    ],
+                    folder: folderName,
+                    files: uploadFiles,
                     allowUpdate,
                 };
 
@@ -1052,6 +1058,7 @@ function ensureBubble() {
                             "github_repo",
                             "github_branch",
                             "github_language",
+                            "github_file_structure",
                             "allowUpdateDefault",
                             "showBubble",
                         ],
@@ -1066,6 +1073,7 @@ function ensureBubble() {
             const repo = (items && items.github_repo) || null;
             const branch = (items && items.github_branch) || "main";
             const chosenExt = (items && items.github_language) || data.extension || "txt";
+            const fileOrg = (items && items.github_file_structure) || "folder";
             const allowUpdate = !!(items && items.allowUpdateDefault);
 
             if (!owner || !repo) {
@@ -1074,7 +1082,6 @@ function ensureBubble() {
             }
 
             const folder = data.folderName;
-            const solutionName = `solution.${chosenExt}`;
             const solutionContent = data.code || "";
             const readmeContent = buildReadme(data);
 
@@ -1083,16 +1090,28 @@ function ensureBubble() {
                 else minimalToast("Uploading solution to GitHub…", true);
             } catch (e) { /* ignore */ }
 
+            let uploadFiles = [];
+            if (fileOrg === 'flat') {
+                // Flat: 0001-two-sum.py
+                uploadFiles = [
+                    { path: `${folder}.${chosenExt}`, content: solutionContent, isBase64: false },
+                    { path: `${folder}.md`, content: readmeContent, isBase64: false }
+                ];
+            } else {
+                // Folder: 0001-two-sum/solution.py
+                uploadFiles = [
+                    { path: `${folder}/solution.${chosenExt}`, content: solutionContent, isBase64: false },
+                    { path: `${folder}/README.md`, content: readmeContent, isBase64: false }
+                ];
+            }
+
             const payload = {
                 action: "uploadFiles",
                 owner,
                 repo,
                 branch,
                 folder,
-                files: [
-                    { path: `${folder}/${solutionName}`, content: solutionContent, isBase64: false },
-                    { path: `${folder}/README.md`, content: readmeContent, isBase64: false }
-                ],
+                files: uploadFiles,
                 allowUpdate,
             };
 

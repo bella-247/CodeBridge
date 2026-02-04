@@ -270,15 +270,35 @@ function onSave() {
     console.warn('[popup] failed to save defaults', e && e.message);
   }
 
-  const folder = lastProblemData.folderName;
-  const solutionName = `solution.${chosenExt}`;
+  // Determine file organization
+  const fileOrg = (document.getElementById('fileOrg') && document.getElementById('fileOrg').value) || 'folder';
+  const folderName = lastProblemData.folderName; // e.g. "0001-two-sum"
   const solutionContent = lastProblemData.code || '';
   const readmeContent = buildReadme(lastProblemData);
+
+  let uploadFiles = [];
+  if (fileOrg === 'flat') {
+    // Flat: 0001-two-sum.py, 0001-two-sum.md
+    uploadFiles = [
+      { path: `${folderName}.${chosenExt}`, content: solutionContent, isBase64: false },
+      { path: `${folderName}.md`, content: readmeContent, isBase64: false }
+    ];
+  } else {
+    // Folder: 0001-two-sum/solution.py, 0001-two-sum/README.md
+    uploadFiles = [
+      { path: `${folderName}/solution.${chosenExt}`, content: solutionContent, isBase64: false },
+      { path: `${folderName}/README.md`, content: readmeContent, isBase64: false }
+    ];
+  }
+
   const payload = {
-    action: 'uploadFiles', owner, repo, branch, folder, files: [
-      { path: `${folder}/${solutionName}`, content: solutionContent, isBase64: false },
-      { path: `${folder}/README.md`, content: readmeContent, isBase64: false }
-    ], allowUpdate
+    action: 'uploadFiles',
+    owner,
+    repo,
+    branch,
+    folder: folderName,
+    files: uploadFiles,
+    allowUpdate
   };
 
   chrome.runtime.sendMessage(payload, (resp) => {
@@ -286,10 +306,7 @@ function onSave() {
     if (!resp) { updateStatus('No response from background', true); return; }
     if (resp.success) {
       updateStatus('Upload succeeded');
-      // remember user choices if they checked rememberMe (separate from token)
-      if (!!$('rememberMe').checked) {
-        chrome.storage.local.set({ github_owner: owner, github_repo: repo, github_branch: branch, remember_me: true });
-      }
+      // settings are auto-saved by persistPopupSettings
     } else {
       updateStatus('Upload failed: ' + (resp.message || 'unknown'), true);
     }
@@ -312,6 +329,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const branch = ($('branch') && $('branch').value.trim()) || '';
         const langSel = document.getElementById('language');
         const lang = (langSel && langSel.value) ? langSel.value : '';
+        const fileOrgSel = document.getElementById('fileOrg');
+        const fileOrg = (fileOrgSel && fileOrgSel.value) ? fileOrgSel.value : 'folder';
         const allowUpdate = !!(document.getElementById('allowUpdate') && document.getElementById('allowUpdate').checked);
         const showBubble = !!(document.getElementById('showBubble') && document.getElementById('showBubble').checked);
         chrome.storage.local.set({
@@ -319,6 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
           github_repo: repo,
           github_branch: branch,
           github_language: lang,
+          github_file_structure: fileOrg,
           allowUpdateDefault: allowUpdate,
           showBubble: showBubble
         }, () => {
@@ -329,7 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // load defaults then check auth status (also restore language & allowUpdate preference)
-  chrome.storage.local.get(['github_owner', 'github_repo', 'github_branch', 'github_language', 'allowUpdateDefault', 'showBubble'], (items) => {
+  chrome.storage.local.get(['github_owner', 'github_repo', 'github_branch', 'github_language', 'github_file_structure', 'allowUpdateDefault', 'showBubble'], (items) => {
     if (items) {
       if (items.github_owner) $('owner').value = items.github_owner;
       if (items.github_repo) $('repo').value = items.github_repo;
@@ -346,6 +366,12 @@ document.addEventListener('DOMContentLoaded', () => {
           try { sel.value = items.github_language; sel.dataset.userSet = '1'; } catch (e) { /* ignore */ }
         }
       }
+      if (items.github_file_structure) {
+        const sel = document.getElementById('fileOrg');
+        if (sel) {
+          try { sel.value = items.github_file_structure; } catch (e) { /* ignore */ }
+        }
+      }
     }
 
     // attach auto-save listeners so changes persist immediately
@@ -354,6 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const repoEl = $('repo'); if (repoEl) repoEl.addEventListener('input', persistPopupSettings);
       const branchEl = $('branch'); if (branchEl) branchEl.addEventListener('input', persistPopupSettings);
       const langEl = document.getElementById('language'); if (langEl) langEl.addEventListener('change', persistPopupSettings);
+      const fileOrgEl = document.getElementById('fileOrg'); if (fileOrgEl) fileOrgEl.addEventListener('change', persistPopupSettings);
       const allowEl = document.getElementById('allowUpdate'); if (allowEl) allowEl.addEventListener('change', persistPopupSettings);
       const showEl = document.getElementById('showBubble'); if (showEl) showEl.addEventListener('change', persistPopupSettings);
     } catch (e) { /* ignore */ }
