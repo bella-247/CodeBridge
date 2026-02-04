@@ -16,7 +16,7 @@ function injectFallbackBubble() {
         const existing = document.getElementById("lcgh-styles-inline");
         if (!existing) {
             const css = `
-                #lcgh-bubble { position: fixed; right: 18px; bottom: 120px; width:56px; height:56px; border-radius:50%; background:#127c5a; color:#fff; display:flex; align-items:center; justify-content:center; z-index:2147483651; cursor:grab; touch-action:none; }
+                #lcgh-bubble { position: fixed; right: 18px; bottom: 120px; width:56px; height:56px; border-radius:50%; background:#127c5a; color:#fff; display:flex; align-items:center; justify-content:center; z-index:2147483651; cursor:pointer; touch-action:none; }
                 #lcgh-bubble .lcgh-close { position:absolute; top:4px; right:4px; width:18px; height:18px; border-radius:50%; background:rgba(0,0,0,0.35); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; cursor:pointer; }
                 #lcgh-toast { position: fixed; right:18px; bottom:190px; background: rgba(17,24,39,0.95); color:#fff; padding:8px 12px; border-radius:8px; z-index:2147483651; display:none; }
             `;

@@ -594,7 +594,7 @@ function ensureBubble() {
         bubble.style.alignItems = "center";
         bubble.style.justifyContent = "center";
         bubble.style.boxShadow = "0 8px 20px rgba(10,20,30,0.25)";
-        bubble.style.cursor = "grab";
+        bubble.style.cursor = "pointer";
         bubble.style.userSelect = "none";
         bubble.style.touchAction = "none";
         bubble.innerHTML =
@@ -743,7 +743,7 @@ function ensureBubble() {
                 const dx = ev.clientX - startX;
                 const dy = ev.clientY - startY;
                 // mark as moved if user dragged beyond small threshold
-                if (!moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4))
+                if (!moved && (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD))
                     moved = true;
                 // if using left/top coordinates
                 if (
@@ -812,7 +812,7 @@ function ensureBubble() {
                     clickPrevent = false;
                     moved = false;
                 }, 200);
-                bubble.style.cursor = "grab";
+                bubble.style.cursor = "pointer";
             } catch (e) {
                 /* ignore */
             }
@@ -1176,7 +1176,7 @@ function ensureBubble() {
 // inject spinner CSS for loading state
 (function injectSpinnerStyles() {
     try {
-        const css = `.lcgh-spinner{width:22px;height:22px;border:3px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:lcgh-spin 1s linear infinite}.lcgh-loading .lcgh-bubble-inner{opacity:0.95}.lcgh-bubble-inner .lcgh-spinner{display:block;margin:0 auto}@keyframes lcgh-spin{to{transform:rotate(360deg)}}`;
+        const css = `.lcgh-spinner{width:22px;height:22px;border:3px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:lcgh-spin 1s linear infinite}.lcgh-loading{cursor:wait!important}.lcgh-loading .lcgh-bubble-inner{opacity:0.95}.lcgh-bubble-inner .lcgh-spinner{display:block;margin:0 auto}@keyframes lcgh-spin{to{transform:rotate(360deg)}}`;
         const s = document.createElement("style");
         s.id = "lcgh-spinner-styles";
         s.textContent = css;
