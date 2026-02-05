@@ -11,7 +11,7 @@ function updateStatus(msg, isError = false) {
   const el = $('status');
   if (!el) return;
   el.textContent = msg || '';
-  el.style.color = isError ? '#9b2c2c' : '#1a202c';
+  el.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
   console.log('[popup] status:', msg);
 }
 
@@ -194,29 +194,56 @@ async function onDetect() {
   }
 }
 
+const DIFF_ICONS = {
+  easy: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="white"/></svg>`,
+  medium: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
+  hard: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  unknown: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
+};
+
 function showMeta(data) {
   const statusEl = $('submissionStatus');
+  const diffIconEl = $('difficultyIcon');
+  const metaBody = $('metaBody');
+
   if (statusEl) {
     statusEl.style.display = 'none';
     statusEl.textContent = '';
   }
 
   if (!data) {
+    if (diffIconEl) {
+      diffIconEl.className = 'diff-icon unknown';
+      diffIconEl.innerHTML = DIFF_ICONS.unknown;
+    }
     $('metaTitle').textContent = 'No problem detected';
-    $('metaIdUrl').textContent = '';
-    $('metaDifficulty').textContent = '';
-    $('metaTags').innerHTML = '';
-    $('metaLangExt').textContent = '';
-    $('detectedPath').textContent = '/0000-unknown/';
+    if (metaBody) metaBody.classList.add('hidden');
     lastProblemData = null;
     return;
   }
+
   lastProblemData = data;
+  if (metaBody) metaBody.classList.remove('hidden');
+
+  // Handle Title
   $('metaTitle').textContent = `${data.id || '0000'} — ${data.title}`;
-  $('metaIdUrl').textContent = data.url || '';
-  $('metaDifficulty').textContent = data.difficulty ? `Difficulty: ${data.difficulty}` : '';
+
+  // Handle Difficulty & Icon
+  const rawDiff = (data.difficulty || 'unknown').toLowerCase();
+  const diffClass = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'unknown';
+
+  if (diffIconEl) {
+    diffIconEl.className = `diff-icon ${diffClass}`;
+    diffIconEl.innerHTML = DIFF_ICONS[diffClass] || DIFF_ICONS.unknown;
+  }
+
+  $('metaDifficulty').textContent = data.difficulty || 'Unknown';
+  $('metaDifficulty').className = `badge ${diffClass}`;
+
+  // Handle Tags
   $('metaTags').innerHTML = (data.tags || []).map(t => `<span class="tag">${t}</span>`).join(' ');
-  $('metaLangExt').textContent = `Detected language: ${data.language || 'unknown'} — .${data.extension || 'txt'}`;
+
+  // Path
   $('detectedPath').textContent = `/${data.folderName}/`;
 
   // Check GitHub for existing submission
@@ -227,15 +254,13 @@ function showMeta(data) {
 
   if (owner && repo && data.id) {
     if (statusEl) {
-      statusEl.textContent = 'Checking GitHub...'; // Simple text loader
+      statusEl.textContent = 'Checking GitHub...';
       statusEl.style.display = 'block';
-      statusEl.style.color = '#6b7280';
+      statusEl.style.color = 'var(--text-muted)';
     }
 
     const langSel = document.getElementById('language');
     const chosenExt = (langSel && langSel.value) ? langSel.value : (data.extension || 'txt');
-
-    // Create a copy of data with the overridden extension for checking purposes
     const checkData = { ...data, extension: chosenExt };
 
     chrome.runtime.sendMessage({
@@ -255,7 +280,7 @@ function showMeta(data) {
       if (lastProblemData && lastProblemData.id === data.id) {
         if (resp && resp.success && resp.exists) {
           statusEl.textContent = `✓ Solution exists in ${resp.repo}`;
-          statusEl.style.color = '#166534';
+          statusEl.style.color = 'var(--accent)';
           statusEl.style.display = 'block';
         } else {
           statusEl.style.display = 'none';
@@ -400,6 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // reveal workflow UI when signed in
       document.getElementById('authPanel') && document.getElementById('authPanel').classList.add('hidden');
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.remove('hidden');
+      document.getElementById('signOutBtn') && document.getElementById('signOutBtn').classList.remove('hidden');
       // auto-detect again once authenticated to ensure metadata is available
       try { onDetect(); } catch (e) { console.warn('auto-detect after auth failed', e && e.message); }
     });
@@ -414,6 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // show workflow panel
       document.getElementById('authPanel') && document.getElementById('authPanel').classList.add('hidden');
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.remove('hidden');
+      document.getElementById('signOutBtn') && document.getElementById('signOutBtn').classList.remove('hidden');
       // automatically detect problem after sign-in to prefill fields
       try { onDetect(); } catch (e) { console.warn('auto-detect after sign-in failed', e && e.message); }
     } else if (message.action === 'deviceFlowError') {
@@ -435,6 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateAuthStatus('Signed out');
       document.getElementById('authPanel') && document.getElementById('authPanel').classList.remove('hidden');
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.add('hidden');
+      document.getElementById('signOutBtn') && document.getElementById('signOutBtn').classList.add('hidden');
       clearDeviceInfo();
       setSignInEnabled(true);
     }
