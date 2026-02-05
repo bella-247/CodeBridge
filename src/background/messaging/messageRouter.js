@@ -7,10 +7,75 @@ import { getToken, clearToken, maskToken } from "../auth/tokenStore.js";
 import { startDeviceFlow } from "../auth/deviceFlow.js";
 import { uploadFilesToRepo } from "../github/uploadService.js";
 import { executeCodeExtraction } from "../leetcode/extractor.js";
+import { generateUploadFiles } from "../../utils/fileStrategies.js";
 
 // ─────────────────────────────────────────────────────────────
 // Message Handlers
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * Handle request to generate files from problem data and upload them
+ * Centralizes the strategy logic (Folder vs Flat)
+ */
+async function handlePrepareAndUpload(message) {
+    const {
+        problemData,
+        owner,
+        repo,
+        branch,
+        fileOrg, // 'folder' or 'flat'
+        allowUpdate
+    } = message;
+
+    if (!problemData || !owner || !repo) {
+        return { success: false, message: "Missing required data (problemData, owner, repo)" };
+    }
+
+    try {
+        // Generate files based on strategy
+        // We use problemData.extension (without dot) or inferred from language
+        // Strategy expects extension "py", "js" etc.
+        const ext = problemData.extension || "txt";
+
+        const files = generateUploadFiles(fileOrg, problemData, ext);
+
+        // Pass to upload service
+        // We calculate folder name for conflict checking inside uploadService if needed,
+        // but uploadService mostly iterates 'files' paths.
+        // However, uploadService uses 'folder' param for conflict reporting context?
+        // Let's look at uploadService again... it iterates files.path.
+
+        const res = await uploadFilesToRepo({
+            owner,
+            repo,
+            branch,
+            files,
+            folder: problemData.folderName, // mostly logic-less but good for logs
+            allowUpdate,
+        });
+
+        // Notify
+        if (res.success) {
+            notify("LeetCode \u2192 GitHub", res.message);
+        } else {
+            notify("LeetCode \u2192 GitHub", "Upload failed: " + res.message);
+        }
+
+        notifyActiveTab(res);
+
+        return {
+            success: !!res.success,
+            message: res.message,
+            results: res.results,
+        };
+
+    } catch (err) {
+        error("handlePrepareAndUpload error", err);
+        notifyActiveTab({ success: false, message: err.message || String(err) });
+        return { success: false, message: err.message || String(err) };
+    }
+}
+
 
 async function handleStartDeviceFlow(message) {
     try {
@@ -162,6 +227,10 @@ export function registerMessageHandlers() {
 
                     case "uploadFiles":
                         sendResponse(await handleUploadFiles(message, sender));
+                        break;
+
+                    case "prepareAndUpload":
+                        sendResponse(await handlePrepareAndUpload(message));
                         break;
 
                     case "executeCodeExtraction":
