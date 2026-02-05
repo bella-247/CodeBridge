@@ -195,6 +195,12 @@ async function onDetect() {
 }
 
 function showMeta(data) {
+  const statusEl = $('submissionStatus');
+  if (statusEl) {
+    statusEl.style.display = 'none';
+    statusEl.textContent = '';
+  }
+
   if (!data) {
     $('metaTitle').textContent = 'No problem detected';
     $('metaIdUrl').textContent = '';
@@ -212,6 +218,51 @@ function showMeta(data) {
   $('metaTags').innerHTML = (data.tags || []).map(t => `<span class="tag">${t}</span>`).join(' ');
   $('metaLangExt').textContent = `Detected language: ${data.language || 'unknown'} — .${data.extension || 'txt'}`;
   $('detectedPath').textContent = `/${data.folderName}/`;
+
+  // Check GitHub for existing submission
+  const owner = ($('owner') && $('owner').value.trim()) || '';
+  const repo = ($('repo') && $('repo').value.trim()) || '';
+  const branch = ($('branch') && $('branch').value.trim()) || 'main';
+  const fileOrg = (document.getElementById('fileOrg') && document.getElementById('fileOrg').value) || 'folder';
+
+  if (owner && repo && data.id) {
+    if (statusEl) {
+      statusEl.textContent = 'Checking GitHub...'; // Simple text loader
+      statusEl.style.display = 'block';
+      statusEl.style.color = '#6b7280';
+    }
+
+    const langSel = document.getElementById('language');
+    const chosenExt = (langSel && langSel.value) ? langSel.value : (data.extension || 'txt');
+
+    // Create a copy of data with the overridden extension for checking purposes
+    const checkData = { ...data, extension: chosenExt };
+
+    chrome.runtime.sendMessage({
+      action: 'checkSubmission',
+      problemData: checkData,
+      owner,
+      repo,
+      branch,
+      fileOrg
+    }, (resp) => {
+      if (!statusEl) return;
+      if (chrome.runtime.lastError) {
+        statusEl.style.display = 'none';
+        return;
+      }
+      // If we are still viewing the same problem (race condition check)
+      if (lastProblemData && lastProblemData.id === data.id) {
+        if (resp && resp.success && resp.exists) {
+          statusEl.textContent = `✓ Solution exists in ${resp.repo}`;
+          statusEl.style.color = '#166534';
+          statusEl.style.display = 'block';
+        } else {
+          statusEl.style.display = 'none';
+        }
+      }
+    });
+  }
 }
 
 
@@ -254,6 +305,8 @@ function onSave() {
     if (!resp) { updateStatus('No response from background', true); return; }
     if (resp.success) {
       updateStatus('Upload succeeded');
+      // Refresh meta view to show the new "Submitted" status immediately
+      if (lastProblemData) showMeta(lastProblemData);
       // settings are auto-saved by persistPopupSettings
     } else {
       updateStatus('Upload failed: ' + (resp.message || 'unknown'), true);
@@ -324,11 +377,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // attach auto-save listeners so changes persist immediately
     try {
-      const ownerEl = $('owner'); if (ownerEl) ownerEl.addEventListener('input', persistPopupSettings);
-      const repoEl = $('repo'); if (repoEl) repoEl.addEventListener('input', persistPopupSettings);
-      const branchEl = $('branch'); if (branchEl) branchEl.addEventListener('input', persistPopupSettings);
-      const langEl = document.getElementById('language'); if (langEl) langEl.addEventListener('change', persistPopupSettings);
-      const fileOrgEl = document.getElementById('fileOrg'); if (fileOrgEl) fileOrgEl.addEventListener('change', persistPopupSettings);
+      const ownerEl = $('owner'); if (ownerEl) ownerEl.addEventListener('input', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const repoEl = $('repo'); if (repoEl) repoEl.addEventListener('input', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const branchEl = $('branch'); if (branchEl) branchEl.addEventListener('input', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const langEl = document.getElementById('language'); if (langEl) langEl.addEventListener('change', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const fileOrgEl = document.getElementById('fileOrg'); if (fileOrgEl) fileOrgEl.addEventListener('change', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
       const allowEl = document.getElementById('allowUpdate'); if (allowEl) allowEl.addEventListener('change', persistPopupSettings);
       const showEl = document.getElementById('showBubble'); if (showEl) showEl.addEventListener('change', persistPopupSettings);
     } catch (e) { /* ignore */ }

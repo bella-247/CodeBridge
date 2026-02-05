@@ -6,12 +6,54 @@ import { notify } from "../core/notifications.js";
 import { getToken, clearToken, maskToken } from "../auth/tokenStore.js";
 import { startDeviceFlow } from "../auth/deviceFlow.js";
 import { uploadFilesToRepo } from "../github/uploadService.js";
+import { ensureRepoExists, getFileShaIfExists } from "../github/repoService.js";
 import { executeCodeExtraction } from "../leetcode/extractor.js";
 import { generateUploadFiles } from "../../utils/fileStrategies.js";
 
 // ─────────────────────────────────────────────────────────────
 // Message Handlers
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * Check if a solution already exists in the repo
+ */
+async function handleCheckSubmission(message) {
+    const {
+        problemData,
+        owner,
+        repo,
+        branch,
+        fileOrg // 'folder' or 'flat'
+    } = message;
+
+    if (!problemData || !owner || !repo) {
+        return { success: false, message: "Missing required data" };
+    }
+
+    try {
+        const ext = problemData.extension || "txt";
+        // Generate expected files to find the path
+        const files = generateUploadFiles(fileOrg, problemData, ext);
+        if (!files || files.length === 0) return { exists: false };
+
+        // The first file is always the solution (in both strategies)
+        const checkPath = files[0].path;
+
+        // Check against GitHub
+        const sha = await getFileShaIfExists(owner, repo, checkPath, branch);
+
+        return {
+            success: true,
+            exists: !!sha,
+            path: checkPath,
+            repo: repo,
+            owner: owner
+        };
+    } catch (err) {
+        // If repo doesn't exist or other API error
+        return { success: false, message: err.message, exists: false };
+    }
+}
 
 /**
  * Handle request to generate files from problem data and upload them
@@ -33,17 +75,9 @@ async function handlePrepareAndUpload(message) {
 
     try {
         // Generate files based on strategy
-        // We use problemData.extension (without dot) or inferred from language
-        // Strategy expects extension "py", "js" etc.
         const ext = problemData.extension || "txt";
 
         const files = generateUploadFiles(fileOrg, problemData, ext);
-
-        // Pass to upload service
-        // We calculate folder name for conflict checking inside uploadService if needed,
-        // but uploadService mostly iterates 'files' paths.
-        // However, uploadService uses 'folder' param for conflict reporting context?
-        // Let's look at uploadService again... it iterates files.path.
 
         const res = await uploadFilesToRepo({
             owner,
@@ -223,6 +257,10 @@ export function registerMessageHandlers() {
 
                     case "signOut":
                         sendResponse(await handleSignOut());
+                        break;
+
+                    case "checkSubmission":
+                        sendResponse(await handleCheckSubmission(message));
                         break;
 
                     case "uploadFiles":
