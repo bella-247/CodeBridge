@@ -9,6 +9,7 @@ import { uploadFilesToRepo } from "../github/uploadService.js";
 import { ensureRepoExists, getFileShaIfExists } from "../github/repoService.js";
 import { executeCodeExtraction } from "../leetcode/extractor.js";
 import { generateUploadFiles } from "../../utils/fileStrategies.js";
+import { fillTemplate } from "../../utils/templateEngine.js";
 
 // ─────────────────────────────────────────────────────────────
 // Message Handlers
@@ -74,18 +75,33 @@ async function handlePrepareAndUpload(message) {
     }
 
     try {
-        // Generate files based on strategy
-        const ext = problemData.extension || "txt";
+        // Fetch templates from storage
+        const items = await new Promise(resolve => {
+            chrome.storage.local.get(['template_commit', 'template_path', 'template_readme'], resolve);
+        });
 
-        const files = generateUploadFiles(fileOrg, problemData, ext);
+        const ext = problemData.extension || "txt";
+        const templates = {
+            path: items.template_path,
+            readme: items.template_readme
+        };
+
+        const files = generateUploadFiles(fileOrg, problemData, ext, templates);
+
+        // Commit message
+        let commitMessage = `Solved ${problemData.id} - ${problemData.title} (${problemData.difficulty})`;
+        if (items.template_commit) {
+            commitMessage = fillTemplate(items.template_commit, { ...problemData, extension: ext });
+        }
 
         const res = await uploadFilesToRepo({
             owner,
             repo,
             branch,
             files,
-            folder: problemData.folderName, // mostly logic-less but good for logs
+            folder: problemData.folderName,
             allowUpdate,
+            commitMessage
         });
 
         // Notify

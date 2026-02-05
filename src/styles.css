@@ -71,7 +71,13 @@ body::after {
     padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
+}
+
+#workflowPanel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 header {
@@ -255,6 +261,7 @@ select:focus {
     gap: 8px;
 }
 
+
 #detectBtn {
     font-size: 11px;
     padding: 6px 12px;
@@ -263,6 +270,7 @@ select:focus {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    margin-bottom: 0.5rem;
 }
 
 #detectBtn:hover {

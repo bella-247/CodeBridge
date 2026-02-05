@@ -69,6 +69,7 @@ export async function uploadFilesToRepo({
     files = [],
     folder = "",
     allowUpdate = false,
+    commitMessage = null,
 }) {
     const token = await getToken();
     if (!token) {
@@ -115,9 +116,15 @@ export async function uploadFilesToRepo({
             const contentBase64 = f.isBase64
                 ? f.content
                 : base64EncodeUnicode(f.content || "");
-            const message = existingMap[path]
-                ? `Update solution for ${path}`
-                : `Add solution for ${path}`;
+
+            // Use custom message if provided, else defaults
+            let finalMessage = commitMessage;
+            if (!finalMessage) {
+                finalMessage = existingMap[path]
+                    ? `Update solution for ${path}`
+                    : `Add solution for ${path}`;
+            }
+
             const sha = existingMap[path];
 
             const json = await putFile(
@@ -125,7 +132,7 @@ export async function uploadFilesToRepo({
                 repo,
                 path,
                 contentBase64,
-                message,
+                finalMessage,
                 branch,
                 sha
             );
