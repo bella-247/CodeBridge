@@ -73,140 +73,35 @@ function formatFolderName(id, title, prefix = "") {
     return prefix ? `${prefix}-${name}` : name;
 }
 
-// --- Platform Adapters ---
+// --- Adapter Loading logic ---
 
-const LeetCodeAdapter = {
-    name: "LeetCode",
-    matches: () => location.hostname.includes("leetcode.com"),
-    getSlug: () => {
-        const parts = location.pathname.split("/").filter(Boolean);
-        const idx = parts.indexOf("problems");
-        return (idx !== -1 && parts.length > idx + 1) ? parts[idx + 1] : (parts[parts.length - 1] || "");
-    },
-    async gather() {
-        const slug = this.getSlug();
-        // Fetch via GraphQL
-        const gql = await (async (s) => {
-            const url = "https://leetcode.com/graphql/";
-            const query = {
-                query: `query getQuestionDetail($titleSlug: String!) { question(titleSlug: $titleSlug) { questionId title content difficulty topicTags { name } } }`,
-                variables: { titleSlug: s },
-            };
-            try {
-                const res = await fetch(url, {
-                    method: "POST",
-                    credentials: "include",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(query),
-                });
-                if (!res.ok) return null;
-                const json = await res.json();
-                return json?.data?.question || null;
-            } catch (err) { return null; }
-        })(slug);
+async function loadAdapter() {
+    const hostname = location.hostname;
+    let moduleUrl = null;
+    let adapterName = null;
 
-        const uiLang = (() => {
-            const btn = document.querySelector('[data-cy="lang-select"] button span');
-            if (btn) return btn.innerText.trim();
-            const selected = document.querySelector(".ant-select-selection-item");
-            return selected ? selected.innerText.trim() : null;
-        })();
-
-        const title = gql?.title || document.title || slug || "unknown";
-        const id = gql?.questionId || null;
-
-        return {
-            platform: "LeetCode",
-            slug,
-            id,
-            title,
-            difficulty: gql?.difficulty || "Unknown",
-            tags: (gql?.topicTags || []).map(t => t.name),
-            contentHtml: gql?.content || "",
-            language: uiLang || "",
-            folderName: formatFolderName(id || slug, title)
-        };
+    if (hostname.includes("leetcode.com")) {
+        moduleUrl = "src/adapters/leetcode.js";
+        adapterName = "LeetCodeAdapter";
+    } else if (hostname.includes("codeforces.com")) {
+        moduleUrl = "src/adapters/codeforces.js";
+        adapterName = "CodeforcesAdapter";
+    } else if (hostname.includes("hackerrank.com")) {
+        moduleUrl = "src/adapters/hackerrank.js";
+        adapterName = "HackerRankAdapter";
     }
-};
 
-const CodeforcesAdapter = {
-    name: "Codeforces",
-    matches: () => location.hostname.includes("codeforces.com"),
-    async gather() {
-        // Try standard problem page header first
-        const titleEl = document.querySelector('.problem-statement .header .title');
-        let rawTitle = titleEl ? titleEl.innerText.trim() : document.title;
+    if (!moduleUrl) return null;
 
-        let id = "0";
-        let title = rawTitle;
-
-        // Pattern 1: Problem Page (e.g. "A. Waterberry")
-        const idMatch = rawTitle.match(/^([A-Z0-9]+)\.\s+(.*)/);
-        if (idMatch) {
-            id = idMatch[1];
-            title = idMatch[2];
-        } else {
-            // Pattern 2: Submission Page or Submit Page (Breadcrumbs / Links)
-            const breadcrumbs = Array.from(document.querySelectorAll('.breadcrumb li a, .rtable tr td a[href*="/problem/"]'));
-            const probLink = breadcrumbs.find(a => a.href.includes('/problem/'));
-            if (probLink) {
-                title = probLink.innerText.trim();
-                const pathParts = probLink.pathname.split('/').filter(Boolean);
-                id = pathParts[pathParts.length - 1] || "0";
-            }
-        }
-
-        const tags = Array.from(document.querySelectorAll('.tag-box')).map(el => el.innerText.trim());
-        const diffTag = tags.find(t => t.startsWith('*'));
-        const difficulty = diffTag ? diffTag.replace('*', '') : "Unknown";
-
-        const langSelect = document.querySelector('select[name="programTypeId"]');
-        const language = langSelect ? langSelect.options[langSelect.selectedIndex].text.trim() : "";
-
-        return {
-            platform: "Codeforces",
-            slug: id,
-            id,
-            title: title.replace(/^Submission\s+[0-9]+\s+for\s+/i, ""),
-            difficulty,
-            tags: tags.filter(t => !t.startsWith('*')),
-            contentHtml: document.querySelector('.problem-statement')?.innerHTML || "",
-            language,
-            folderName: formatFolderName(id, title, "CF")
-        };
+    try {
+        // Dynamic import from extension resources
+        const mod = await import(chrome.runtime.getURL(moduleUrl));
+        return mod[adapterName];
+    } catch (e) {
+        console.error("[CodeBridge] Failed to load adapter", e);
+        return null;
     }
-};
-
-const HackerRankAdapter = {
-    name: "HackerRank",
-    matches: () => location.hostname.includes("hackerrank.com"),
-    async gather() {
-        const titleEl = document.querySelector('.challenge-title') || document.querySelector('h1.hr_header-title') || document.querySelector('.page-label');
-        const title = titleEl ? titleEl.innerText.trim() : document.title;
-
-        const diffEl = document.querySelector('.difficulty-label') || document.querySelector('.challenge-difficulty');
-        const difficulty = diffEl ? diffEl.innerText.trim() : "Unknown";
-
-        const tags = Array.from(document.querySelectorAll('.challenge-categories-list a, .breadcrumb-item a')).map(a => a.innerText.trim());
-
-        const langEl = document.querySelector('.language-selector .ant-select-selection-item') || document.querySelector('.select-language');
-        const language = langEl ? langEl.innerText.trim() : "";
-
-        return {
-            platform: "HackerRank",
-            slug: location.pathname.split('/').filter(p => p && p !== 'challenges' && p !== 'submissions' && p !== 'show')[0] || "unknown",
-            id: null,
-            title: title.replace(/\s+Solution$/i, ""),
-            difficulty,
-            tags,
-            contentHtml: (document.querySelector('.challenge-body-html') || document.querySelector('.problem-statement') || document.querySelector('.challenge-description'))?.innerHTML || "",
-            language,
-            folderName: formatFolderName(null, title, "HR")
-        };
-    }
-};
-
-const Adapters = [LeetCodeAdapter, CodeforcesAdapter, HackerRankAdapter];
+}
 
 // --- Core Logic ---
 
@@ -225,25 +120,63 @@ async function getEditorCode() {
 }
 
 async function gatherProblemData() {
-    const adapter = Adapters.find(a => a.matches());
+    const adapter = await loadAdapter();
     if (!adapter) return null;
 
     try {
         const data = await adapter.gather();
         const editor = await getEditorCode();
 
+        let code = editor.code || "";
+        const isCodeforces = adapter.name === "Codeforces";
+
+        // Strategy: prefer "Silent Scraping" for Codeforces to ensure we get the submitted version
+        // For others, use it as fallback if editor is empty
+        const shouldFetch = (isCodeforces && adapter.getSubmissionUrl) || (!code.trim() && adapter.getSubmissionUrl);
+
+        if (shouldFetch) {
+            const subUrl = adapter.getSubmissionUrl();
+            if (subUrl) {
+                console.log("[CodeBridge] Fetching submission from:", subUrl);
+                const res = await new Promise(resolve => {
+                    chrome.runtime.sendMessage({ action: "fetchSubmissionCode", url: subUrl }, resolve);
+                });
+                if (res && res.success && res.code) {
+                    code = res.code; // Override editor code with legitimate submission
+                    if (res.language) data.language = res.language; // Update language from submission page
+                }
+            }
+        }
+
         const detectedLang = data.language || editor.languageId || "";
         const normLang = normalizeLanguage(detectedLang);
         const extWithDot = LANGUAGE_EXTENSION_MAP[normLang] || ".txt";
 
+        // Helper to format folder name since it's now internal to content.js or reused
+        // We reuse the local formatFolderName function (ensure it exists in content.js or adapter)
+        // The adapter might return empty folderName if it relies on us. 
+        // We will stick to the Adapter returning basic data and we format here if needed, 
+        // OR we trust the adapter does it. 
+        // In the files I created, I left folderName: "" to be "generated by core logic".
+        // Let's ensure formatFolderName is used here if adapter didn't provide it.
+
+        let folderName = data.folderName;
+        if (!folderName) {
+            let prefix = "";
+            if (adapter.name === "Codeforces") prefix = "CF";
+            if (adapter.name === "HackerRank") prefix = "HR";
+            folderName = formatFolderName(data.id || data.slug, data.title, prefix);
+        }
+
         return {
             ...data,
-            code: editor.code || "",
+            code: code,
             language: detectedLang,
             normalizedLanguage: normLang,
             suggestedExtension: extWithDot,
             extension: extWithDot.replace(/^\./, ""),
-            url: location.href
+            url: location.href,
+            folderName: folderName
         };
     } catch (err) {
         console.error("[CodeBridge] gather failed", err);

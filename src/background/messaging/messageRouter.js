@@ -226,6 +226,46 @@ function notifyActiveTab(res) {
     }
 }
 
+async function handleFetchSubmissionCode(message) {
+    const { url } = message;
+    if (!url) return { success: false, message: "Missing URL" };
+
+    try {
+        console.log("[CodeBridge] Background fetching:", url);
+        const response = await fetch(url);
+        console.log("[CodeBridge] Fetch response status:", response.status);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const text = await response.text();
+        console.log("[CodeBridge] Fetch text length:", text.length);
+
+        // Extract code from <pre id="program-source-text">
+        const regex = /<pre id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/;
+        const match = text.match(regex);
+
+        if (match && match[1]) {
+            console.log("[CodeBridge] Code regex match success");
+            const code = match[1]
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&amp;/g, "&")
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'");
+
+            // Try to extract language: <td>Language:</td>\s*<td>(.*?)</td>
+            const langRegex = /<td>Language:<\/td>\s*<td>(.*?)<\/td>/i;
+            const langMatch = text.match(langRegex);
+            const language = langMatch ? langMatch[1].trim() : null;
+
+            return { success: true, code, language };
+        }
+        console.warn("[CodeBridge] Code regex match failed");
+        return { success: false, message: "Could not find code on submission page" };
+    } catch (err) {
+        console.error("[CodeBridge] Fetch error:", err);
+        return { success: false, message: err.message };
+    }
+}
+
 function handleExecuteCodeExtraction(message, sender, sendResponse) {
     try {
         if (!sender || !sender.tab || !sender.tab.id) {
@@ -285,6 +325,10 @@ export function registerMessageHandlers() {
 
                     case "prepareAndUpload":
                         sendResponse(await handlePrepareAndUpload(message));
+                        break;
+
+                    case "fetchSubmissionCode":
+                        sendResponse(await handleFetchSubmissionCode(message));
                         break;
 
                     case "executeCodeExtraction":

@@ -47,7 +47,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "src/bridge.js"
+        "src/bridge.js",
+        "src/adapters/*.js"
       ],
       "matches": [
         "https://*.leetcode.com/*",
