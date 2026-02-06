@@ -48,7 +48,8 @@
     {
       "resources": [
         "src/bridge.js",
-        "src/adapters/*.js"
+        "src/adapters/*.js",
+        "src/scrapers/*.js"
       ],
       "matches": [
         "https://*.leetcode.com/*",

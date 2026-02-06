@@ -231,34 +231,47 @@ async function handleFetchSubmissionCode(message) {
     if (!url) return { success: false, message: "Missing URL" };
 
     try {
-        console.log("[CodeBridge] Background fetching:", url);
-        const response = await fetch(url);
+        console.log("[CodeBridge] Background fetching submission with credentials:", url);
+        // CRITICAL: We MUST include credentials to use the user's session cookies
+        const response = await fetch(url, { credentials: 'include' });
         console.log("[CodeBridge] Fetch response status:", response.status);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
         const text = await response.text();
         console.log("[CodeBridge] Fetch text length:", text.length);
 
-        // Extract code from <pre id="program-source-text">
-        const regex = /<pre id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/;
-        const match = text.match(regex);
+        // Robust parsing for <pre id="program-source-text">
+        const startTag = '<pre id="program-source-text"';
+        const endTag = '</pre>';
+        const startIndex = text.indexOf(startTag);
 
-        if (match && match[1]) {
-            console.log("[CodeBridge] Code regex match success");
-            const code = match[1]
-                .replace(/&lt;/g, "<")
-                .replace(/&gt;/g, ">")
-                .replace(/&amp;/g, "&")
-                .replace(/&quot;/g, '"')
-                .replace(/&#39;/g, "'");
+        if (startIndex !== -1) {
+            const closingBracketIndex = text.indexOf('>', startIndex);
+            const endIndex = text.indexOf(endTag, closingBracketIndex);
 
-            // Try to extract language: <td>Language:</td>\s*<td>(.*?)</td>
-            const langRegex = /<td>Language:<\/td>\s*<td>(.*?)<\/td>/i;
-            const langMatch = text.match(langRegex);
-            const language = langMatch ? langMatch[1].trim() : null;
+            if (endIndex !== -1) {
+                let rawCode = text.substring(closingBracketIndex + 1, endIndex);
 
-            return { success: true, code, language };
+                // Decode HTML entities
+                const code = rawCode
+                    .replace(/&lt;/g, "<")
+                    .replace(/&gt;/g, ">")
+                    .replace(/&amp;/g, "&")
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'")
+                    .replace(/&apos;/g, "'");
+
+                // Extract Language metadata from the submission page summary table
+                const langRegex = /<td>Language:<\/td>\s*<td>(.*?)<\/td>/i;
+                const langMatch = text.match(langRegex);
+                const language = langMatch ? langMatch[1].trim() : null;
+
+                console.log("[CodeBridge] Code extraction success. Language detected:", language);
+                return { success: true, code, language };
+            }
         }
-        console.warn("[CodeBridge] Code regex match failed");
+
+        console.warn("[CodeBridge] Could not locate code block in HTML response");
         return { success: false, message: "Could not find code on submission page" };
     } catch (err) {
         console.error("[CodeBridge] Fetch error:", err);
