@@ -133,13 +133,28 @@ const CodeforcesAdapter = {
     name: "Codeforces",
     matches: () => location.hostname.includes("codeforces.com"),
     async gather() {
+        // Try standard problem page header first
         const titleEl = document.querySelector('.problem-statement .header .title');
-        const rawTitle = titleEl ? titleEl.innerText.trim() : document.title;
+        let rawTitle = titleEl ? titleEl.innerText.trim() : document.title;
 
-        // CF titles usually start with "A. " or "123A. "
+        let id = "0";
+        let title = rawTitle;
+
+        // Pattern 1: Problem Page (e.g. "A. Waterberry")
         const idMatch = rawTitle.match(/^([A-Z0-9]+)\.\s+(.*)/);
-        const id = idMatch ? idMatch[1] : "0";
-        const title = idMatch ? idMatch[2] : rawTitle;
+        if (idMatch) {
+            id = idMatch[1];
+            title = idMatch[2];
+        } else {
+            // Pattern 2: Submission Page or Submit Page (Breadcrumbs / Links)
+            const breadcrumbs = Array.from(document.querySelectorAll('.breadcrumb li a, .rtable tr td a[href*="/problem/"]'));
+            const probLink = breadcrumbs.find(a => a.href.includes('/problem/'));
+            if (probLink) {
+                title = probLink.innerText.trim();
+                const pathParts = probLink.pathname.split('/').filter(Boolean);
+                id = pathParts[pathParts.length - 1] || "0";
+            }
+        }
 
         const tags = Array.from(document.querySelectorAll('.tag-box')).map(el => el.innerText.trim());
         const diffTag = tags.find(t => t.startsWith('*'));
@@ -152,7 +167,7 @@ const CodeforcesAdapter = {
             platform: "Codeforces",
             slug: id,
             id,
-            title,
+            title: title.replace(/^Submission\s+[0-9]+\s+for\s+/i, ""),
             difficulty,
             tags: tags.filter(t => !t.startsWith('*')),
             contentHtml: document.querySelector('.problem-statement')?.innerHTML || "",
@@ -166,19 +181,26 @@ const HackerRankAdapter = {
     name: "HackerRank",
     matches: () => location.hostname.includes("hackerrank.com"),
     async gather() {
-        const title = document.querySelector('.challenge-title')?.innerText.trim() || document.title;
-        const difficulty = document.querySelector('.difficulty-label')?.innerText.trim() || "Unknown";
-        const tags = Array.from(document.querySelectorAll('.challenge-categories-list a')).map(a => a.innerText.trim());
+        const titleEl = document.querySelector('.challenge-title') || document.querySelector('h1.hr_header-title') || document.querySelector('.page-label');
+        const title = titleEl ? titleEl.innerText.trim() : document.title;
+
+        const diffEl = document.querySelector('.difficulty-label') || document.querySelector('.challenge-difficulty');
+        const difficulty = diffEl ? diffEl.innerText.trim() : "Unknown";
+
+        const tags = Array.from(document.querySelectorAll('.challenge-categories-list a, .breadcrumb-item a')).map(a => a.innerText.trim());
+
+        const langEl = document.querySelector('.language-selector .ant-select-selection-item') || document.querySelector('.select-language');
+        const language = langEl ? langEl.innerText.trim() : "";
 
         return {
             platform: "HackerRank",
-            slug: location.pathname.split('/').pop(),
+            slug: location.pathname.split('/').filter(p => p && p !== 'challenges' && p !== 'submissions' && p !== 'show')[0] || "unknown",
             id: null,
-            title,
+            title: title.replace(/\s+Solution$/i, ""),
             difficulty,
             tags,
-            contentHtml: document.querySelector('.challenge-body-html')?.innerHTML || "",
-            language: document.querySelector('.language-selector .ant-select-selection-item')?.innerText || "",
+            contentHtml: (document.querySelector('.challenge-body-html') || document.querySelector('.problem-statement') || document.querySelector('.challenge-description'))?.innerHTML || "",
+            language,
             folderName: formatFolderName(null, title, "HR")
         };
     }

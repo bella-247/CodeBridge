@@ -111,7 +111,15 @@ function extractCodeFromPage() {
             }
         } catch (e) { }
 
-        // 7) DOM reconstruction fallback (monaco view-line)
+        // 7) Codeforces / Plain text pre fallback
+        try {
+            const pre = document.querySelector("#program-source-text") || document.querySelector("pre.prettyprint") || document.querySelector("pre.sh_cpp");
+            if (pre && pre.innerText.trim().length > 50) {
+                return { code: pre.innerText, languageId: null };
+            }
+        } catch (e) { }
+
+        // 8) DOM reconstruction fallback (monaco view-line)
         try {
             const viewLines = Array.from(document.querySelectorAll(".monaco-editor .view-line"));
             if (viewLines && viewLines.length) {
@@ -131,14 +139,14 @@ function extractCodeFromPage() {
 }
 
 /**
- * Execute code extraction in a tab
+ * Execute code extraction in all frames of a tab and pick the best result.
  * @param {number} tabId - The tab ID to extract from
  * @param {Function} sendResponse - Callback to send response
  */
 export function executeCodeExtraction(tabId, sendResponse) {
     chrome.scripting.executeScript(
         {
-            target: { tabId },
+            target: { tabId, allFrames: true },
             world: "MAIN",
             func: extractCodeFromPage,
         },
@@ -152,7 +160,22 @@ export function executeCodeExtraction(tabId, sendResponse) {
                 });
                 return;
             }
-            sendResponse({ success: true, data: results[0].result });
+
+            // Filter out failures and pick the result with the longest code
+            const validResults = results
+                .map(r => r.result)
+                .filter(res => res && res.code && res.code.trim().length > 0);
+
+            if (validResults.length === 0) {
+                sendResponse({ success: true, data: { code: "", languageId: null } });
+                return;
+            }
+
+            const best = validResults.reduce((prev, current) => {
+                return (current.code.length > prev.code.length) ? current : prev;
+            });
+
+            sendResponse({ success: true, data: best });
         }
     );
 }
