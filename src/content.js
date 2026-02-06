@@ -26,279 +26,210 @@
     }
 })();
 
-// Utility: get slug from URL (/problems/<slug>/...)
-function getSlugFromUrl() {
+// Content script for CodeBridge — Multi-Platform Support
+// Responsibilities:
+// - Detect platform and use appropriate adapter
+// - Gather problem metadata (id, title, difficulty, etc.)
+// - Extract code and language
+// - Provide consistent data structure to background/popup
+
+(function __codebridge_instrumentation() {
     try {
-        const parts = location.pathname.split("/").filter(Boolean);
-        // Typical LeetCode problem URL: /problems/<slug>/ or /problems/<slug>/description/
-        const idx = parts.indexOf("problems");
-        if (idx !== -1 && parts.length > idx + 1) return parts[idx + 1];
-        // Fallback: last path segment
-        return parts[parts.length - 1] || "";
-    } catch (e) {
-        return "";
-    }
-}
+        console.log("[CodeBridge] content script loaded:", location.href);
+    } catch (e) { }
+})();
 
-// Fetch metadata from LeetCode GraphQL endpoint
-async function fetchQuestionGraphQL(slug) {
-    if (!slug) return null;
-    const url = "https://leetcode.com/graphql/";
-    const query = {
-        query: `
-      query getQuestionDetail($titleSlug: String!) {
-        question(titleSlug: $titleSlug) {
-          questionId
-          title
-          content
-          difficulty
-          topicTags {
-            name
-            slug
-          }
-        }
-      }
-    `,
-        variables: { titleSlug: slug },
-    };
+// --- Constants and Maps ---
 
-    try {
-        const res = await fetch(url, {
-            method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(query),
-        });
-        if (!res.ok) return null;
-        const json = await res.json();
-        return json?.data?.question || null;
-    } catch (err) {
-        console.error("LeetCode GraphQL fetch failed", err);
-        return null;
-    }
-}
+const LANGUAGE_EXTENSION_MAP = {
+    cpp: ".cpp", c: ".c", java: ".java", python: ".py", python3: ".py",
+    csharp: ".cs", javascript: ".js", typescript: ".ts", ruby: ".rb",
+    swift: ".swift", go: ".go", kotlin: ".kt", rust: ".rs", php: ".php",
+    scala: ".scala", sql: ".sql", bash: ".sh", dart: ".dart", haskell: ".hs",
+    lua: ".lua", perl: ".pl", rust: ".rs"
+};
 
-// Helper to retrieve code from page context (accessing window.monaco)
-function getCodeFromPageContext() {
-    return new Promise((resolve) => {
-        // Always use background script execution (privileged access) as it is the most robust method
-        // to bypass DOM virtualization and security restrictions.
-        try {
-            chrome.runtime.sendMessage(
-                { action: "executeCodeExtraction" },
-                (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.warn(
-                            "Background code extraction failed:",
-                            chrome.runtime.lastError.message
-                        );
-                        resolve(null);
-                        return;
-                    }
-                    if (response && response.success && response.data) {
-                        resolve(response.data);
-                    } else {
-                        resolve(null);
-                    }
-                }
-            );
-        } catch (e) {
-            console.error("Message sending failed:", e);
-            resolve(null);
-        }
-    });
-}
+// --- Helper Functions ---
 
-/* Robust getEditorCode — collect candidates and pick the longest
-   Rationale: some editor APIs or DOM extracts can appear truncated depending on which model/element is queried.
-   Instead of returning the first found value, gather candidates from all known sources and choose the longest,
-   while attempting to preserve any detected languageId from the source that provided the longest content.
-*/
-async function getEditorCode() {
-    try {
-        // Priority 1, 2, 3: Try to get code from page context via background script (Main World)
-        // This covers Monaco, window.editor, and CodeMirror object access
-        const pageContextCode = await getCodeFromPageContext();
-        if (
-            pageContextCode &&
-            pageContextCode.code &&
-            pageContextCode.code.trim().length > 0
-        ) {
-            return {
-                code: pageContextCode.code,
-                languageId: pageContextCode.languageId,
-            };
-        }
-
-        // Priority 4: Hidden <textarea>
-        try {
-            const textarea = document.querySelector("textarea");
-            if (
-                textarea &&
-                textarea.value &&
-                textarea.value.trim().length > 0
-            ) {
-                return { code: textarea.value, languageId: null };
-            }
-        } catch (e) {
-            /* ignore */
-        }
-
-        // Priority 5: Fallback: <pre><code> blocks
-        try {
-            const codeBlock = document.querySelector("pre code");
-            if (
-                codeBlock &&
-                codeBlock.innerText &&
-                codeBlock.innerText.trim().length > 0
-            ) {
-                return { code: codeBlock.innerText, languageId: null };
-            }
-        } catch (e) {
-            /* ignore */
-        }
-
-        // Final rule: If all methods fail → return null (empty object here to match signature)
-        return { code: "", languageId: null };
-    } catch (err) {
-        console.error("getEditorCode error", err);
-        return { code: "", languageId: null };
-    }
-}
-
-// Attempt to detect selected language from UI (improved)
-function getDetectedLanguage() {
-    try {
-        const btn = document.querySelector(
-            '[data-cy="lang-select"] button span'
-        );
-        if (btn) return btn.innerText.trim();
-
-        const selected = document.querySelector(".ant-select-selection-item");
-        if (selected) return selected.innerText.trim();
-
-        // Fallback to previous methods if specific selectors fail
-        const selects = Array.from(
-            document.querySelectorAll('select, [aria-label*="Language"]')
-        );
-        for (const s of selects) {
-            if (s.tagName === "SELECT") {
-                const val =
-                    s.value ||
-                    (s.options &&
-                        s.options[s.selectedIndex] &&
-                        s.options[s.selectedIndex].text);
-                if (val) return String(val).trim();
-            }
-        }
-
-        return null;
-    } catch (e) {
-        return null;
-    }
-}
-
-// Normalize language name
 function normalizeLanguage(lang) {
     if (!lang) return null;
     return lang.replace(/[^A-Za-z0-9+#]+/g, "").toLowerCase();
 }
 
-const LANGUAGE_EXTENSION_MAP = {
-    cpp: ".cpp",
-    c: ".c",
-    java: ".java",
-    python: ".py",
-    python3: ".py",
-    csharp: ".cs",
-    javascript: ".js",
-    typescript: ".ts",
-    ruby: ".rb",
-    swift: ".swift",
-    go: ".go",
-    kotlin: ".kt",
-    rust: ".rs",
-    php: ".php",
-    scala: ".scala",
-    racket: ".rkt",
-    erlang: ".erl",
-    elixir: ".ex",
-    sql: ".sql",
-    bash: ".sh",
-    dart: ".dart",
-    haskell: ".hs",
-    lua: ".lua",
-    perl: ".pl",
-    ocaml: ".ml",
-    fsharp: ".fs",
-    scheme: ".scm",
-    prolog: ".pl",
-    fortran: ".f90",
-    nim: ".nim",
-};
-
-// Normalize language id to file extension
 function languageToExtension(lang) {
     const norm = normalizeLanguage(lang);
     return LANGUAGE_EXTENSION_MAP[norm] || ".txt";
 }
 
-// Build kebab-case title and zero-padded ID
-function formatFolderName(id, title) {
-    const pad = id ? String(id).padStart(4, "0") : "0000";
+function formatFolderName(id, title, prefix = "") {
+    const pad = id && !isNaN(id) ? String(id).padStart(4, "0") : id || "0000";
     const kebab = title
         .toLowerCase()
         .replace(/[`~!@#$%^&*()+=\[\]{};:'"\\|<>\/?]/g, "")
         .replace(/\s+/g, "-")
         .replace(/--+/g, "-")
         .replace(/^-+|-+$/g, "");
-    return `${pad}-${kebab}`;
+    const name = `${pad}-${kebab}`;
+    return prefix ? `${prefix}-${name}` : name;
 }
 
-// Main gather function
+// --- Platform Adapters ---
+
+const LeetCodeAdapter = {
+    name: "LeetCode",
+    matches: () => location.hostname.includes("leetcode.com"),
+    getSlug: () => {
+        const parts = location.pathname.split("/").filter(Boolean);
+        const idx = parts.indexOf("problems");
+        return (idx !== -1 && parts.length > idx + 1) ? parts[idx + 1] : (parts[parts.length - 1] || "");
+    },
+    async gather() {
+        const slug = this.getSlug();
+        // Fetch via GraphQL
+        const gql = await (async (s) => {
+            const url = "https://leetcode.com/graphql/";
+            const query = {
+                query: `query getQuestionDetail($titleSlug: String!) { question(titleSlug: $titleSlug) { questionId title content difficulty topicTags { name } } }`,
+                variables: { titleSlug: s },
+            };
+            try {
+                const res = await fetch(url, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(query),
+                });
+                if (!res.ok) return null;
+                const json = await res.json();
+                return json?.data?.question || null;
+            } catch (err) { return null; }
+        })(slug);
+
+        const uiLang = (() => {
+            const btn = document.querySelector('[data-cy="lang-select"] button span');
+            if (btn) return btn.innerText.trim();
+            const selected = document.querySelector(".ant-select-selection-item");
+            return selected ? selected.innerText.trim() : null;
+        })();
+
+        const title = gql?.title || document.title || slug || "unknown";
+        const id = gql?.questionId || null;
+
+        return {
+            platform: "LeetCode",
+            slug,
+            id,
+            title,
+            difficulty: gql?.difficulty || "Unknown",
+            tags: (gql?.topicTags || []).map(t => t.name),
+            contentHtml: gql?.content || "",
+            language: uiLang || "",
+            folderName: formatFolderName(id || slug, title)
+        };
+    }
+};
+
+const CodeforcesAdapter = {
+    name: "Codeforces",
+    matches: () => location.hostname.includes("codeforces.com"),
+    async gather() {
+        const titleEl = document.querySelector('.problem-statement .header .title');
+        const rawTitle = titleEl ? titleEl.innerText.trim() : document.title;
+
+        // CF titles usually start with "A. " or "123A. "
+        const idMatch = rawTitle.match(/^([A-Z0-9]+)\.\s+(.*)/);
+        const id = idMatch ? idMatch[1] : "0";
+        const title = idMatch ? idMatch[2] : rawTitle;
+
+        const tags = Array.from(document.querySelectorAll('.tag-box')).map(el => el.innerText.trim());
+        const diffTag = tags.find(t => t.startsWith('*'));
+        const difficulty = diffTag ? diffTag.replace('*', '') : "Unknown";
+
+        const langSelect = document.querySelector('select[name="programTypeId"]');
+        const language = langSelect ? langSelect.options[langSelect.selectedIndex].text.trim() : "";
+
+        return {
+            platform: "Codeforces",
+            slug: id,
+            id,
+            title,
+            difficulty,
+            tags: tags.filter(t => !t.startsWith('*')),
+            contentHtml: document.querySelector('.problem-statement')?.innerHTML || "",
+            language,
+            folderName: formatFolderName(id, title, "CF")
+        };
+    }
+};
+
+const HackerRankAdapter = {
+    name: "HackerRank",
+    matches: () => location.hostname.includes("hackerrank.com"),
+    async gather() {
+        const title = document.querySelector('.challenge-title')?.innerText.trim() || document.title;
+        const difficulty = document.querySelector('.difficulty-label')?.innerText.trim() || "Unknown";
+        const tags = Array.from(document.querySelectorAll('.challenge-categories-list a')).map(a => a.innerText.trim());
+
+        return {
+            platform: "HackerRank",
+            slug: location.pathname.split('/').pop(),
+            id: null,
+            title,
+            difficulty,
+            tags,
+            contentHtml: document.querySelector('.challenge-body-html')?.innerHTML || "",
+            language: document.querySelector('.language-selector .ant-select-selection-item')?.innerText || "",
+            folderName: formatFolderName(null, title, "HR")
+        };
+    }
+};
+
+const Adapters = [LeetCodeAdapter, CodeforcesAdapter, HackerRankAdapter];
+
+// --- Core Logic ---
+
+async function getEditorCode() {
+    return new Promise((resolve) => {
+        try {
+            chrome.runtime.sendMessage({ action: "executeCodeExtraction" }, (response) => {
+                if (chrome.runtime.lastError || !response || !response.success) {
+                    resolve({ code: "", languageId: null });
+                } else {
+                    resolve(response.data);
+                }
+            });
+        } catch (e) { resolve({ code: "", languageId: null }); }
+    });
+}
+
 async function gatherProblemData() {
-    const slug = getSlugFromUrl();
-    const gql = await fetchQuestionGraphQL(slug);
-    const editor = await getEditorCode();
+    const adapter = Adapters.find(a => a.matches());
+    if (!adapter) return null;
 
-    // Detect language from UI first, fallback to editor languageId
-    const uiLang = getDetectedLanguage();
-    const detectedLang = uiLang || editor.languageId || null;
-    const normalizedLang = normalizeLanguage(detectedLang);
+    try {
+        const data = await adapter.gather();
+        const editor = await getEditorCode();
 
-    // Map to extension (remove dot for 'extension' field to match existing logic if needed,
-    // but user asked for .ext in suggestedExtension. Existing logic uses 'extension' without dot in some places?
-    // Looking at previous code: languageToExtension returned 'py', 'cpp' (no dot).
-    // The new map has dots.
-    // I will provide both formats to be safe for existing consumers.
-    const extWithDot = LANGUAGE_EXTENSION_MAP[normalizedLang] || ".txt";
-    const extNoDot = extWithDot.replace(/^\./, "");
+        const detectedLang = data.language || editor.languageId || "";
+        const normLang = normalizeLanguage(detectedLang);
+        const extWithDot = LANGUAGE_EXTENSION_MAP[normLang] || ".txt";
 
-    const title = gql?.title || document.title || slug || "unknown";
-    const id = gql?.questionId || null;
-    const difficulty = gql?.difficulty || null;
-    const tags = (gql?.topicTags || []).map((t) => t.name);
-    const contentHtml = gql?.content || null;
-    const url = location.href;
-
-    return {
-        slug,
-        id,
-        title,
-        url,
-        difficulty,
-        tags,
-        contentHtml,
-        code: editor.code || "",
-        language: detectedLang || "",
-        normalizedLanguage: normalizedLang,
-        suggestedExtension: extWithDot,
-        extension: extNoDot, // Keep for backward compatibility
-        folderName: formatFolderName(id || slug, title),
-    };
+        return {
+            ...data,
+            code: editor.code || "",
+            language: detectedLang,
+            normalizedLanguage: normLang,
+            suggestedExtension: extWithDot,
+            extension: extWithDot.replace(/^\./, ""),
+            url: location.href
+        };
+    } catch (err) {
+        console.error("[CodeBridge] gather failed", err);
+        return null;
+    }
 }
+
+
 
 // Expose via message listener for popup/background to request
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

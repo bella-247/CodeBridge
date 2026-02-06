@@ -86,7 +86,32 @@ function extractCodeFromPage() {
             };
         }
 
-        // 5) DOM reconstruction fallback (monaco view-line)
+        // 5) Ace Editor fallback
+        try {
+            const aceEl = document.querySelector(".ace_editor");
+            if (aceEl && window.ace) {
+                const editor = ace.edit(aceEl);
+                if (editor && typeof editor.getValue === "function") {
+                    return { code: editor.getValue(), languageId: null };
+                }
+            }
+        } catch (e) { }
+
+        // 6) Generic Textarea fallback (longest)
+        try {
+            const textareas = Array.from(document.querySelectorAll("textarea"));
+            if (textareas.length) {
+                let best = textareas[0];
+                for (const t of textareas) {
+                    if (t.value.length > best.value.length) best = t;
+                }
+                if (best.value.length > 50) { // arbitrary threshold to avoid search boxes
+                    return { code: best.value, languageId: null };
+                }
+            }
+        } catch (e) { }
+
+        // 7) DOM reconstruction fallback (monaco view-line)
         try {
             const viewLines = Array.from(document.querySelectorAll(".monaco-editor .view-line"));
             if (viewLines && viewLines.length) {

@@ -162,8 +162,7 @@ function bindUI() {
 
   const help = $('helpLink'); if (help) help.addEventListener('click', (e) => {
     e.preventDefault();
-    if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
-    else chrome.tabs.create({ url: chrome.runtime.getURL('src/DEVICE_FLOW_SETUP.md') });
+    chrome.tabs.create({ url: chrome.runtime.getURL('src/help.html') });
   });
 }
 
@@ -226,7 +225,13 @@ function showMeta(data) {
   if (metaBody) metaBody.classList.remove('hidden');
 
   // Handle Title
-  $('metaTitle').textContent = `${data.id || '0000'} — ${data.title}`;
+  $('metaTitle').textContent = `${data.id ? data.id + ' — ' : ''}${data.title}`;
+
+  // Handle Platform
+  if ($('metaPlatform')) {
+    $('metaPlatform').textContent = data.platform || 'LeetCode';
+    $('metaPlatform').style.display = 'inline-block';
+  }
 
   // Handle Difficulty & Icon
   const rawDiff = (data.difficulty || 'unknown').toLowerCase();

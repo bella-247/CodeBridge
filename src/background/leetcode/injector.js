@@ -5,19 +5,25 @@ import { log } from "../core/logger.js";
 import { injectFallbackBubbleIfNeeded } from "./fallbackBubble.js";
 
 /**
- * Check if a URL is a LeetCode page
+ * Check if a URL is a supported coding platform
  * @param {string} url 
  * @returns {boolean}
  */
-function isLeetCodeUrl(url) {
-    return url && url.startsWith("https://leetcode.com/");
+function isSupportedUrl(url) {
+    if (!url) return false;
+    const supported = [
+        "leetcode.com",
+        "codeforces.com",
+        "hackerrank.com"
+    ];
+    return supported.some(domain => url.includes(domain));
 }
 
 /**
- * Inject content script into a LeetCode tab
+ * Inject content script into a supported tab
  * @param {number} tabId - Tab ID to inject into
  */
-function injectContentScriptIfLeetCode(tabId) {
+function injectContentScript(tabId) {
     try {
         if (!tabId) return;
 
@@ -26,7 +32,7 @@ function injectContentScriptIfLeetCode(tabId) {
 
             try {
                 const url = String(tab.url);
-                if (!isLeetCodeUrl(url)) return;
+                if (!isSupportedUrl(url)) return;
 
                 // Execute script in the tab's main world
                 try {
@@ -70,7 +76,7 @@ export function registerTabInjection() {
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         try {
             if (changeInfo && (changeInfo.status === "complete" || changeInfo.status === "loading")) {
-                injectContentScriptIfLeetCode(tabId);
+                injectContentScript(tabId);
             }
         } catch (e) {
             log("tabs.onUpdated handler error", e && e.message);
@@ -81,7 +87,7 @@ export function registerTabInjection() {
     chrome.tabs.onActivated.addListener(async (activeInfo) => {
         try {
             if (!activeInfo || !activeInfo.tabId) return;
-            injectContentScriptIfLeetCode(activeInfo.tabId);
+            injectContentScript(activeInfo.tabId);
         } catch (e) {
             log("tabs.onActivated handler error", e && e.message);
         }
@@ -92,7 +98,7 @@ export function registerTabInjection() {
         try {
             if (tabs && tabs.length) {
                 const tab = tabs[0];
-                if (tab && tab.id) injectContentScriptIfLeetCode(tab.id);
+                if (tab && tab.id) injectContentScript(tab.id);
             }
         } catch (e) {
             log("initial active tab injection error", e && e.message);
