@@ -33,7 +33,14 @@ export const HackerRankAdapter = {
             title: title.replace(/\s+Solution$/i, ""),
             difficulty,
             tags,
-            contentHtml: (document.querySelector('.challenge-body-html') || document.querySelector('.problem-statement') || document.querySelector('.challenge-description'))?.innerHTML || "",
+            contentHtml: (() => {
+                const el = document.querySelector('.challenge-body-html') || document.querySelector('.problem-statement') || document.querySelector('.challenge-description');
+                if (!el) return "";
+                const clone = el.cloneNode(true);
+                // Clean junk
+                clone.querySelectorAll('script, style, .MathJax_Preview, .MathJax, .mjx-chtml, .mjx-assistive-mm, .ui-help-text').forEach(n => n.remove());
+                return clone.innerHTML;
+            })(),
             language,
             folderName: ""
         };

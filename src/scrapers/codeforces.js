@@ -58,7 +58,24 @@ export const CodeforcesScraper = {
             const difficulty = difficultyTag ? difficultyTag.replace('*', '') : "Unknown";
 
             const contentEl = document.querySelector('.problem-statement');
-            const contentHtml = contentEl ? contentEl.innerHTML : "";
+            let contentHtml = "";
+            if (contentEl) {
+                // Clone to clean without touching live page
+                const clone = contentEl.cloneNode(true);
+
+                // Remove MathJax artifacts and other junk
+                const junkSelectors = [
+                    '.MathJax_Preview', '.MathJax_Display', '.MathJax',
+                    'script', 'style', '.mjx-chtml', '.mjx-assistive-mm',
+                    '.header', // Codeforces header usually contains redundant title/limits
+                    '.sample-tests .title', // Remove "Example" or "Sample tests" text
+                ];
+                junkSelectors.forEach(s => {
+                    clone.querySelectorAll(s).forEach(n => n.remove());
+                });
+
+                contentHtml = clone.innerHTML;
+            }
 
             const urlSlug = this.getSlug(location.href);
             const idMatch = title.match(/^([A-Z0-9]+)\.\s+(.*)/);
@@ -80,10 +97,11 @@ export const CodeforcesScraper = {
 
             return {
                 id: id,
+                slug: id, // compatibility
                 title: cleanTitle,
-                content: contentHtml,
+                contentHtml: contentHtml && contentHtml.length > 50 ? contentHtml : (contentEl ? contentEl.innerHTML : ""),
                 difficulty: difficulty,
-                topicTags: tags.map(t => ({ name: t.replace('*', '') })),
+                tags: tags.map(t => t.replace('*', '').trim()),
             };
         } catch (e) {
             console.error("Codeforces DOM scrape for metadata failed", e);

@@ -883,7 +883,7 @@ function ensureBubble() {
         try {
             console.log("lcgh: onBubbleClick invoked");
             const data = await gatherProblemData();
-            if (!data || !data.slug) {
+            if (!data || (!data.slug && !data.id)) {
                 minimalToast("No problem detected on this page", false);
                 return;
             }
