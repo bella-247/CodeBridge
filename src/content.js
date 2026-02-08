@@ -235,6 +235,10 @@
 
     // Expose via message listener for popup/background to request
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message && message.action === "ping") {
+            sendResponse({ success: true });
+            return;
+        }
         if (message && message.action === "getProblemData") {
             (async () => {
                 const data = await gatherProblemData();
@@ -339,6 +343,10 @@
 
     // Perform upload using stored defaults
     async function performAutoSave(problemData) {
+        if (!problemData || !problemData.code || problemData.code.trim().length === 0) {
+            console.warn("Auto-save aborted: No solution code detected.");
+            return;
+        }
         try {
             chrome.storage.local.get(
                 [
@@ -904,6 +912,11 @@
                 const data = await gatherProblemData();
                 if (!data) {
                     minimalToast("Failed to gather problem data. Are you on a supported problem page?", false);
+                    return;
+                }
+
+                if (!data.code || data.code.trim().length === 0) {
+                    minimalToast("Solution code not found! Make sure you have code in the editor or a valid submission.", false);
                     return;
                 }
 

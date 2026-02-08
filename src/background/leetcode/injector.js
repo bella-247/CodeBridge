@@ -93,15 +93,17 @@ export function registerTabInjection() {
         }
     });
 
-    // Also attempt to inject to the currently active tab at startup
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    // Also attempt to inject to ALL matching tabs at startup (not just the active one)
+    chrome.tabs.query({ url: ["*://*.leetcode.com/*", "*://*.codeforces.com/*", "*://*.hackerrank.com/*"] }, (tabs) => {
         try {
             if (tabs && tabs.length) {
-                const tab = tabs[0];
-                if (tab && tab.id) injectContentScript(tab.id);
+                log(`Found ${tabs.length} existing tabs to inject into.`);
+                tabs.forEach(tab => {
+                    if (tab && tab.id) injectContentScript(tab.id);
+                });
             }
         } catch (e) {
-            log("initial active tab injection error", e && e.message);
+            log("initial mass injection error", e && e.message);
         }
     });
 

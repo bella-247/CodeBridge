@@ -177,11 +177,42 @@ async function onDetect() {
     const tabs = await queryActiveTab();
     if (!tabs || tabs.length === 0) throw new Error('No active tab found');
     const tabId = tabs[0].id;
-    try { await new Promise((resolve) => chrome.scripting.executeScript({ target: { tabId }, files: ['src/content.js'] }, () => resolve())); } catch (e) { }
-    await new Promise(r => setTimeout(r, 250));
+
+    // Smart Detection: Try to ping the script first. If no response, inject it.
+    const isScriptReady = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.success) {
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+
+    if (!isScriptReady) {
+      console.log('[popup] Content script not found. Injecting...');
+      try {
+        await new Promise((resolve, reject) => {
+          chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['src/content.js']
+          }, () => {
+            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+            else resolve();
+          });
+        });
+        // Give it a moment to initialize listeners
+        await new Promise(r => setTimeout(r, 300));
+      } catch (e) {
+        console.warn('Manual injection failed (might already be there or restricted page):', e.message);
+      }
+    }
+
+    // Now request the data
     chrome.tabs.sendMessage(tabId, { action: 'getProblemData' }, (response) => {
       if (chrome.runtime.lastError || !response || !response.success || !response.data || !response.data.title) {
-        const errorMsg = (response && response.message) || (response && response.data && !response.data.title ? 'Problem title not found. Try refreshing the page.' : 'Unable to detect problem on this tab.');
+        const errorMsg = (response && response.message) ||
+          (response && response.data && !response.data.title ? 'Problem title not found. Try refreshing the page.' : 'Unable to detect problem on this tab.');
         updateStatus(errorMsg, true);
         showMeta(null);
         return;
@@ -223,7 +254,12 @@ function showMeta(data) {
   }
 
   lastProblemData = data;
-  if (metaBody) metaBody.classList.remove('hidden');
+  if (metaBody) {
+    metaBody.classList.remove('hidden');
+    metaBody.classList.remove('pop-in');
+    void metaBody.offsetWidth; // force reflow
+    metaBody.classList.add('pop-in');
+  }
 
   // Handle Title
   $('metaTitle').textContent = `${data.id ? data.id + ' — ' : ''}${data.title}`;
@@ -251,6 +287,11 @@ function showMeta(data) {
 
   // Path
   $('detectedPath').textContent = `/${data.folderName}/`;
+
+  // Check if solution code exists
+  if (!data.code || data.code.trim().length === 0) {
+    updateStatus('Warning: No solution code detected! Extraction failed.', true);
+  }
 
   // Check GitHub for existing submission
   const owner = ($('owner') && $('owner').value.trim()) || '';
@@ -301,6 +342,11 @@ function showMeta(data) {
 function onSave() {
   updateStatus('Preparing upload...');
   if (!lastProblemData) { updateStatus('No detected problem. Click Detect first.', true); return; }
+
+  if (!lastProblemData.code || lastProblemData.code.trim().length === 0) {
+    updateStatus('Error: Solution code not found. Cannot upload.', true);
+    return;
+  }
   const owner = $('owner').value.trim();
   const repo = $('repo').value.trim();
   const branch = $('branch').value.trim() || 'main';
