@@ -10,44 +10,30 @@ export const CodeforcesAdapter = {
     name: "Codeforces",
     matches: () => location.hostname.includes("codeforces.com"),
 
-    /**
-     * Finds the URL of the latest "Accepted" submission on the current page.
-     * Strategy:
-     * 1. Locate Sidebar: table.rtable.smaller
-     * 2. Find "Accepted": row containing .verdict-accepted
-     * 3. Extract Link: <a> tag in that row
-     * @returns {string|null} The submission URL or null if not found.
-     */
     getSubmissionUrl() {
-        console.log("[CodeBridge] Scanning for Codeforces submission URL (Sidebar Priority)...");
+        console.log("[CodeBridge] Scanning for Codeforces submission URL (Ultra-Robust)...");
 
-        // 1. Target the sidebars specifically (rtable smaller is standard)
-        const sidebarTables = Array.from(document.querySelectorAll('table.rtable.smaller, .sidebar table'));
-
-        for (const table of sidebarTables) {
-            // 2. Look for the row containing the span/class 'verdict-accepted'
-            const acceptedVerdict = table.querySelector('.verdict-accepted');
-            if (acceptedVerdict) {
-                const row = acceptedVerdict.closest('tr');
-                if (row) {
-                    // 3. Find the submission link in that row
-                    const link = row.querySelector('a[href*="/submission/"]');
-                    if (link) {
-                        // link.href automatically returns the absolute URL
-                        console.log(`[CodeBridge] Found accepted submission in sidebar: ${link.href}`);
-                        return link.href;
-                    }
-                }
-            }
-        }
-
-        // Fallback: Robust scan of all links if sidebar check fails (covers status pages, etc.)
+        // Strategy A: Check all links on the page that point to a submission
+        // We look for any link containing '/submission/' and check if its 
+        // surrounding container (row) contains 'Accepted'.
         const allLinks = Array.from(document.querySelectorAll('a[href*="/submission/"]'));
+
         for (const link of allLinks) {
-            const container = link.closest('tr') || link.parentElement;
-            if (container && (container.querySelector('.verdict-accepted') || /Accepted/i.test(container.innerText))) {
-                console.log(`[CodeBridge] Found accepted submission (Fallback Scan): ${link.href}`);
-                return link.href;
+            // Find the closest table row or relevant container
+            const row = link.closest('tr') || link.parentElement;
+            if (!row) continue;
+
+            const text = row.innerText || "";
+            // Check for verdict-accepted class or the word "Accepted" in the row
+            const isAccepted = row.querySelector('.verdict-accepted') ||
+                row.querySelector('.verdict_accepted') ||
+                /Accepted/i.test(text);
+
+            if (isAccepted) {
+                // Return absolute URL
+                const absoluteUrl = new URL(link.getAttribute('href'), location.origin).href;
+                console.log(`[CodeBridge] Found accepted submission link: ${absoluteUrl}`);
+                return absoluteUrl;
             }
         }
 
@@ -72,5 +58,16 @@ export const CodeforcesAdapter = {
             ...metadata,
             platform: "Codeforces"
         };
+    },
+
+    /**
+     * Fetches a submission page and extracts the source code and language.
+     * This method directly uses the CodeforcesScraper.
+     * @param {string} submissionUrl - The URL of the submission to fetch.
+     * @returns {Promise<{code: string, language: string}|null>}
+     */
+    async fetchSolution(submissionUrl) {
+        console.log("[CodeBridge] Adapter fetching solution via scraper:", submissionUrl);
+        return CodeforcesScraper.extractSolution(submissionUrl);
     }
 };

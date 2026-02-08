@@ -1,0 +1,86 @@
+## Diagnosis of Codeforces Solution Fetching Issue
+
+**Problem:** The CodeBridge extension can extract Codeforces problem descriptions but fails to retrieve solution code, despite attempting to use submission IDs and user credentials in the background.
+
+**Investigation Summary:**
+
+1.  **`src/adapters/codeforces.js`:** The `getSubmissionUrl()` function is responsible for identifying the "Accepted" submission URL on a Codeforces problem page.
+2.  **`src/content.js`:** This script acts as a bridge. It loads the Codeforces adapter, calls `adapter.getSubmissionUrl()`, and then sends a message (`action: "fetchSubmissionCode"`) to the background script with the identified `submissionUrl`.
+3.  **`src/background/index.js`:** This is a thin orchestrator that registers message handlers.
+4.  **`src/background/messaging/messageRouter.js`:** This file contains `handleFetchSubmissionCode`, the function that executes the actual fetch request and parses the solution.
+
+**`handleFetchSubmissionCode` Analysis:**
+
+The `handleFetchSubmissionCode` function in `src/background/messaging/messageRouter.js` attempts to fetch the solution using the following logic:
+
+```javascript
+async function handleFetchSubmissionCode(message) {
+    const { url } = message;
+    // ... (URL validation)
+
+    try {
+        // CRITICAL: We MUST include credentials to use the user's session cookies
+        const response = await fetch(url, { credentials: 'include' });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const text = await response.text();
+
+        // Robust parsing using a flexible regex for <pre id="program-source-text">
+        const regex = /<pre[^>]*id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/i;
+        const match = text.match(regex);
+
+        if (match && match[1]) {
+            // ... (HTML entity decoding)
+            // Extract Language using regex /<td>Language:<\/td>\s*<td>(.*?)<\/td>/i;
+            // ... (return success with code and language)
+        } else {
+            // ... (log warning, return failure "Could not find code on submission page")
+        }
+    } catch (err) {
+        // ... (log error, return failure with error message)
+    }
+}
+```
+
+**Potential Causes for the Failure:**
+
+1.  **Codeforces Website Structure Change (Most Likely):** Codeforces might have changed the HTML structure of its submission pages.
+    *   The `id="program-source-text"` might have been altered or removed.
+    *   The format of the language information in the table might have changed.
+    *   If these elements cannot be found by the regular expressions, the script will fail to extract the code and language.
+2.  **Authentication/Session Issues:**
+    *   While `credentials: 'include'` is used, it's possible the user's Codeforces session is expired or invalid in the browser context from which the background script is fetching.
+    *   Codeforces could have implemented additional security measures (e.g., specific headers, JavaScript-based checks) that prevent simple `fetch` requests from extensions, even with cookies.
+3.  **Incorrect `submissionUrl`:** The `adapter.getSubmissionUrl()` function in `src/adapters/codeforces.js` might not be correctly identifying the "Accepted" submission URL anymore, leading the background script to fetch a page that doesn't contain solution code or is not a valid submission page.
+4.  **Network/CORS Restrictions:** Although less common for background scripts, stricter network policies from Codeforces could theoretically interfere with the `fetch` request.
+
+**How to Diagnose Further (Steps for the User):**
+
+To pinpoint the exact cause, please perform the following steps while the extension is running on a Codeforces problem page where you expect a solution to be fetched:
+
+1.  **Open Developer Tools for the Extension Background Page:**
+    *   Go to `chrome://extensions/` (or `edge://extensions/` for Edge).
+    *   Ensure "Developer mode" is enabled.
+    *   Find the CodeBridge extension and click on "background page" (or "service worker" if it's a newer manifest V3 extension). This will open a new Developer Tools window specific to the background script.
+2.  **Navigate to a Codeforces Problem Page:** Open a Codeforces problem page in your regular browser window where you have an "Accepted" solution, and the extension should normally try to fetch it.
+3.  **Trigger the Fetch (if not automatic):** If the fetch isn't automatic, try to trigger the extension's action (e.g., click the extension icon, use the upload button).
+4.  **Inspect the Background Page Console:** In the Developer Tools window for the background page, look at the "Console" tab.
+    *   Search for messages like `[CodeBridge] Background fetching submission with credentials: [URL]` and `[CodeBridge] Fetch response status: [STATUS_CODE]`.
+    *   **Crucially, note the `STATUS_CODE`.** If it's not `200 OK`, that indicates an issue with the fetch itself (e.g., `404 Not Found`, `401 Unauthorized`, `403 Forbidden`).
+    *   Look for any errors logged by `console.error("[CodeBridge] Fetch error:", err);`.
+5.  **Inspect the Network Tab in the Background Page Developer Tools:**
+    *   Go to the "Network" tab in the background page's Developer Tools.
+    *   Look for the `fetch` request made to `codeforces.com/submission/...`.
+    *   Click on the request and examine its details:
+        *   **Headers:** Check if `Cookie` headers are being sent.
+        *   **Response:** Look at the raw HTML response. **This is critical.**
+            *   Does the HTML contain an element with `id="program-source-text"`?
+            *   What is the surrounding HTML for the language information?
+            *   Does the HTML look like a proper submission page, or an error page (e.g., "Login required", "Page not found")?
+6.  **Verify the `submissionUrl` in the Content Script:**
+    *   In your regular browser window (the Codeforces problem page), open the Developer Tools.
+    *   Go to the "Console" tab.
+    *   Look for messages from the content script, particularly related to `[CodeBridge] Found accepted submission link: [URL]`. Copy this URL.
+    *   Manually navigate to this URL in a *new tab* in your browser. Are you logged in and can you see the source code directly?
+
+By following these steps, we should be able to narrow down whether the issue is with the URL being identified, the network request itself, or the parsing of the received HTML.

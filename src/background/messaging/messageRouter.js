@@ -226,6 +226,23 @@ function notifyActiveTab(res) {
     }
 }
 
+
+/**
+ * Decodes common HTML entities in a string.
+ * Codeforces source code is always HTML-escaped.
+ * @param {string} text
+ * @returns {string}
+ */
+function decodeHtmlEntities(text) {
+    return text
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'") // for single quotes
+        .replace(/&apos;/g, "'"); // for single quotes
+}
+
 async function handleFetchSubmissionCode(message) {
     const { url } = message;
     if (!url) return { success: false, message: "Missing URL" };
@@ -238,41 +255,45 @@ async function handleFetchSubmissionCode(message) {
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const text = await response.text();
-        console.log("[CodeBridge] Fetch text length:", text.length);
+        console.log("[CodeBridge] Page fetched. Text length:", text.length);
 
-        // Robust parsing for <pre id="program-source-text">
-        const startTag = '<pre id="program-source-text"';
-        const endTag = '</pre>';
-        const startIndex = text.indexOf(startTag);
+        // Step 1: Integrity Check (The CSRF Gate)
+        if (!text.includes('class="csrf-token"')) {
+            throw new Error("Session Error: Valid Codeforces page not found (missing CSRF token). User might be logged out or redirected.");
+        }
+        console.log("[CodeBridge] CSRF token found.");
 
-        if (startIndex !== -1) {
-            const closingBracketIndex = text.indexOf('>', startIndex);
-            const endIndex = text.indexOf(endTag, closingBracketIndex);
+        // Step 2: Locate the Source Code
+        if (!text.includes('id="program-source-text"')) {
+            throw new Error("Structure Error: Submission code container not found. The submission might be hidden or the website layout changed.");
+        }
+        console.log("[CodeBridge] Code block ID found.");
 
-            if (endIndex !== -1) {
-                let rawCode = text.substring(closingBracketIndex + 1, endIndex);
 
-                // Decode HTML entities
-                const code = rawCode
-                    .replace(/&lt;/g, "<")
-                    .replace(/&gt;/g, ">")
-                    .replace(/&amp;/g, "&")
-                    .replace(/&quot;/g, '"')
-                    .replace(/&#39;/g, "'")
-                    .replace(/&apos;/g, "'");
+        // Step 3: Extract and Decode
+        // Use a Regex to capture the content inside <pre id="program-source-text"...>(.*?)</pre>.
+        const codeRegex = /<pre[^>]*id="program-source-text"[^>]*>([\s\S]*?)<\/pre>/i;
+        const codeMatch = text.match(codeRegex);
 
-                // Extract Language metadata from the submission page summary table
-                const langRegex = /<td>Language:<\/td>\s*<td>(.*?)<\/td>/i;
-                const langMatch = text.match(langRegex);
-                const language = langMatch ? langMatch[1].trim() : null;
-
-                console.log("[CodeBridge] Code extraction success. Language detected:", language);
-                return { success: true, code, language };
-            }
+        let code = "";
+        if (codeMatch && codeMatch[1]) {
+            code = decodeHtmlEntities(codeMatch[1]);
+            console.log("[CodeBridge] Code block extracted and decoded.");
+        } else {
+            // This case should theoretically be covered by the includes check above,
+            // but good to have as a fallback if regex fails after includes.
+            throw new Error("Structure Error: Failed to extract code content from the identified block.");
         }
 
-        console.warn("[CodeBridge] Could not locate code block in HTML response");
-        return { success: false, message: "Could not find code on submission page" };
+        // Step 4: Extract Metadata (Language)
+        const langRegex = /<td>Language:<\/td>\s*<td>(.*?)<\/td>/i;
+        const langMatch = text.match(langRegex);
+        const language = langMatch ? langMatch[1].trim() : null;
+        console.log("[CodeBridge] Language detected:", language);
+
+        console.log("[CodeBridge] Code extraction process completed successfully.");
+        return { success: true, code, language };
+
     } catch (err) {
         console.error("[CodeBridge] Fetch error:", err);
         return { success: false, message: err.message };

@@ -1,6 +1,6 @@
-# LeetCode → GitHub Chrome Extension
+# Code Bridge
 
-Exports solved LeetCode problems into a GitHub repository as organized folders with a solution file and README.
+Code Bridge is a powerful Chrome extension that effortlessly bridges your coding progress by syncing solved problems from LeetCode, Codeforces, and HackerRank directly to your GitHub repository. It automatically organizes your solutions into well-structured folders with solution files and detailed READMEs.
 
 ## Quick summary
 - Detects problem metadata on LeetCode (ID, title, URL, difficulty, tags, description).

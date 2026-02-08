@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LeetCode → GitHub Exporter",
+  "name": "Code Bridge",
   "version": "1.0.0",
-  "description": "Export solved LeetCode problems to a GitHub repository as organized folders with solution and README.",
+  "description": "Code Bridge: Effortlessly sync your solved problems from LeetCode, Codeforces, and HackerRank to GitHub. Organizes your solutions into clean, structured repository folders automatically.",
   "permissions": [
     "identity",
     "storage",

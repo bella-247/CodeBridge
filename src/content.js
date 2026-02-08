@@ -62,14 +62,25 @@ function languageToExtension(lang) {
 }
 
 function formatFolderName(id, title, prefix = "") {
-    const pad = id && !isNaN(id) ? String(id).padStart(4, "0") : id || "0000";
+    const isNumericId = id && !isNaN(id);
+    const pad = (isNumericId ? String(id).padStart(4, "0") : id || "0000").trim();
     const kebab = title
         .toLowerCase()
         .replace(/[`~!@#$%^&*()+=\[\]{};:'"\\|<>\/?]/g, "")
         .replace(/\s+/g, "-")
         .replace(/--+/g, "-")
-        .replace(/^-+|-+$/g, "");
-    const name = `${pad}-${kebab}`;
+        .replace(/^-+|-+$/g, "")
+        .trim();
+
+    let name;
+    // If ID is the same as kebab title, or one contains the other (non-numeric), don't duplicate
+    const lowPad = pad.toLowerCase();
+    if (!isNumericId && (lowPad === kebab || lowPad.includes(kebab) || kebab.includes(lowPad))) {
+        name = lowPad.length >= kebab.length ? lowPad : kebab;
+    } else {
+        name = `${pad}-${kebab}`;
+    }
+
     return prefix ? `${prefix}-${name}` : name;
 }
 
@@ -137,13 +148,27 @@ async function gatherProblemData() {
         if (shouldFetch) {
             const subUrl = adapter.getSubmissionUrl();
             if (subUrl) {
-                console.log("[CodeBridge] Fetching submission from:", subUrl);
-                const res = await new Promise(resolve => {
-                    chrome.runtime.sendMessage({ action: "fetchSubmissionCode", url: subUrl }, resolve);
-                });
+                console.log("[CodeBridge] Attempting to fetch submission for:", subUrl);
+                let res = null;
+
+                if (isCodeforces && adapter.fetchSolution) {
+                    // For Codeforces, use the adapter's direct fetchSolution in the content script
+                    // This leverages the content script's access to the page's DOM and cookies
+                    console.log("[CodeBridge] Using adapter.fetchSolution for Codeforces.");
+                    res = await adapter.fetchSolution(subUrl);
+                } else {
+                    // For other platforms or as a fallback, send message to background script
+                    console.log("[CodeBridge] Sending fetchSubmissionCode to background script.");
+                    res = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: "fetchSubmissionCode", url: subUrl }, resolve);
+                    });
+                }
+                
                 if (res && res.success && res.code) {
                     code = res.code; // Override editor code with legitimate submission
                     if (res.language) data.language = res.language; // Update language from submission page
+                } else {
+                    console.warn("[CodeBridge] Failed to fetch solution:", res ? res.message : "unknown error");
                 }
             }
         }
