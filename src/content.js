@@ -226,12 +226,11 @@
                 folderName: folderName
             };
         } catch (err) {
-            console.error("[CodeBridge] gather failed", err);
-            return null;
+            console.error("[CodeBridge] gatherProblemData failed", err);
+            // Re-throw to be caught by the messenger or return a structured error
+            throw err;
         }
     }
-
-
 
     // Expose via message listener for popup/background to request
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -241,8 +240,12 @@
         }
         if (message && message.action === "getProblemData") {
             (async () => {
-                const data = await gatherProblemData();
-                sendResponse({ success: true, data });
+                try {
+                    const data = await gatherProblemData();
+                    sendResponse({ success: true, data });
+                } catch (err) {
+                    sendResponse({ success: false, message: err.message || String(err) });
+                }
             })();
             return true; // keep channel open for async response
         }

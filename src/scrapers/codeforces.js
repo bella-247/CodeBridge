@@ -20,22 +20,24 @@ export const CodeforcesScraper = {
      */
     getSlug(url) {
         try {
-            const parts = new URL(url).pathname.split("/").filter(Boolean);
-            if (parts.includes("contest")) {
-                const probIdx = parts.indexOf("problem");
-                if (probIdx !== -1 && probIdx > 0) {
-                    const contestId = parts[probIdx - 1];
-                    const problemLetter = parts[probIdx + 1];
-                    return `${contestId}${problemLetter}`;
-                }
-            } else if (parts.includes("problemset")) {
-                const probIdx = parts.indexOf("problem");
-                if (probIdx !== -1 && parts.length >= probIdx + 3) {
-                    const contestId = parts[probIdx + 1];
-                    const problemLetter = parts[probIdx + 2];
-                    return `${contestId}${problemLetter}`;
-                }
+            const urlObj = new URL(url);
+            const path = urlObj.pathname;
+
+            // Handle /contest/{id}/problem/{index}
+            // Handle /gym/{id}/problem/{index}
+            const contestMatch = path.match(/\/(contest|gym)\/(\d+)\/problem\/([A-Z0-9]+)/i);
+            if (contestMatch) {
+                return `${contestMatch[2]}${contestMatch[3]}`;
             }
+
+            // Handle /problemset/problem/{id}/{index}
+            const problemsetMatch = path.match(/\/problemset\/problem\/(\d+)\/([A-Z0-9]+)/i);
+            if (problemsetMatch) {
+                return `${problemsetMatch[1]}${problemsetMatch[2]}`;
+            }
+
+            // Fallback: splitting
+            const parts = path.split("/").filter(Boolean);
             return parts[parts.length - 1] || "unknown";
         } catch (e) {
             console.error("Failed to parse slug from URL:", url, e);
