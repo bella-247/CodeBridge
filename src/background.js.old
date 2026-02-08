@@ -414,25 +414,72 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         folder,
                         allowUpdate,
                     });
+                    // Notify via system notification
                     if (res.success) {
                         notify("LeetCode → GitHub", res.message);
-                        sendResponse({
-                            success: true,
-                            message: res.message,
-                            results: res.results,
-                        });
                     } else {
-                        notify(
-                            "LeetCode → GitHub",
-                            "Upload failed: " + res.message
-                        );
-                        sendResponse({ success: false, message: res.message });
+                        notify("LeetCode → GitHub", "Upload failed: " + res.message);
                     }
-                } catch (err) {
+
+                    // Send response back to caller
                     sendResponse({
-                        success: false,
-                        message: err.message || String(err),
+                        success: !!res.success,
+                        message: res.message,
+                        results: res.results,
                     });
+
+                    // Additionally: inform the active tab (if any) so the content script can show an in-page toast.
+                    try {
+                        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                            try {
+                                const tabId = tabs && tabs[0] && tabs[0].id;
+                                if (!tabId) return;
+                                chrome.tabs.sendMessage(
+                                    tabId,
+                                    {
+                                        action: "showUploadToast",
+                                        success: !!res.success,
+                                        message: res.message || (res && res.results ? "Uploaded" : "Upload completed"),
+                                    },
+                                    () => {
+                                        if (chrome.runtime.lastError) {
+                                            log("sendMessage to tab failed:", chrome.runtime.lastError.message);
+                                        } else {
+                                            log("sent showUploadToast to tab", tabId);
+                                        }
+                                    }
+                                );
+                            } catch (e) {
+                                log("tabs.query/sendMessage inner error", e && e.message);
+                            }
+                        });
+                    } catch (e) {
+                        log("failed to notify tab about upload", e && e.message);
+                    }
+
+                } catch (err) {
+                    // Ensure we also try to notify the active tab about the failure
+                    try {
+                        sendResponse({
+                            success: false,
+                            message: err.message || String(err),
+                        });
+                        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                            try {
+                                const tabId = tabs && tabs[0] && tabs[0].id;
+                                if (!tabId) return;
+                                chrome.tabs.sendMessage(
+                                    tabId,
+                                    {
+                                        action: "showUploadToast",
+                                        success: false,
+                                        message: err.message || String(err),
+                                    },
+                                    () => {}
+                                );
+                            } catch (ee) { /* ignore */ }
+                        });
+                    } catch (ee) { /* ignore */ }
                 }
                 return;
             }
@@ -856,22 +903,199 @@ function notify(title, message) {
     }
 }
 
-// On startup, if there is a persisted device flow state, restore and ensure alarm exists
-(async function restoreOnStartup() {
-    try {
-        const state = await readPersistedDeviceFlowState();
-        if (state && state.device_code) {
-            log("restoring persisted device flow state on startup", {
-                device_code: state.device_code,
-            });
-            activeDeviceFlow = state;
-            // ensure alarm exists
-            scheduleAlarmForDeviceFlow(
-                state.device_code,
-                state.intervalSeconds || 5
-            );
-        }
-    } catch (e) {
-        warn("restoreOnStartup error", e && e.message);
-    }
-})();
+ // On startup, if there is a persisted device flow state, restore and ensure alarm exists
+ (async function restoreOnStartup() {
+     try {
+         const state = await readPersistedDeviceFlowState();
+         if (state && state.device_code) {
+             log("restoring persisted device flow state on startup", {
+                 device_code: state.device_code,
+             });
+             activeDeviceFlow = state;
+             // ensure alarm exists
+             scheduleAlarmForDeviceFlow(
+                 state.device_code,
+                 state.intervalSeconds || 5
+             );
+         }
+     } catch (e) {
+         warn("restoreOnStartup error", e && e.message);
+     }
+ })();
+ 
+ // Programmatic content-script injection fallback:
+ // Some pages/platforms may prevent declarative content scripts from running in every frame.
+ // To ensure the floating bubble appears on LeetCode pages, inject the content script
+ // when a tab navigates or becomes active and the URL matches LeetCode.
+ function injectContentScriptIfLeetCode(tabId) {
+     try {
+         if (!tabId) return;
+         chrome.tabs.get(tabId, (tab) => {
+             if (!tab || !tab.url) return;
+             try {
+                 const url = String(tab.url);
+                 if (!url.startsWith("https://leetcode.com/")) return;
+                 // Execute script in the tab's main world; try allFrames + MAIN world as a robust fallback.
+                 // After injecting the file, run a small inline check that logs to the page console so users can
+                 // see whether the bubble was created (helpful when content scripts are blocked in main frame).
+                     try {
+                     chrome.scripting.executeScript(
+                         {
+                             target: { tabId, allFrames: true },
+                             files: ["src/content.js"],
+                             world: "MAIN",
+                         },
+                         (injectionResults) => {
+                             if (chrome.runtime.lastError) {
+                                 log("injectContentScript failed:", chrome.runtime.lastError.message);
+                             } else {
+                                 log("attempted injection of content script into tab", tabId, tab.url, { framesInjected: Array.isArray(injectionResults) ? injectionResults.length : null });
+                             }
+                             // Run a small diagnostic in the page to log whether the bubble DOM node exists.
+                             try {
+                                 chrome.scripting.executeScript(
+                                     {
+                                         target: { tabId },
+                                         world: "MAIN",
+                                         func: () => {
+                                             try {
+                                                 const exists = !!document.getElementById("lcgh-bubble");
+                                                 // Use page console so the user can see it in DevTools
+                                                 console.log("lcgh: injected-check bubbleExists=", exists);
+                                                 return exists;
+                                             } catch (e) {
+                                                 console.log("lcgh: injected-check error", e && e.message);
+                                                 return false;
+                                             }
+                                         },
+                                     },
+                                     (diagRes) => {
+                                         if (chrome.runtime.lastError) {
+                                             log("diagnostic injection failed:", chrome.runtime.lastError.message);
+                                         } else {
+                                             const bubbleExists = diagRes && diagRes[0] && typeof diagRes[0].result !== "undefined" ? !!diagRes[0].result : false;
+                                             log("diagnostic injection executed", { bubbleExists });
+                                             // If the bubble is not present, inject a minimal inline bubble as a last-resort fallback.
+                                             if (!bubbleExists) {
+                                                 try {
+                                                     chrome.scripting.executeScript(
+                                                         {
+                                                             target: { tabId },
+                                                             world: "MAIN",
+                                                             func: () => {
+                                                                 try {
+                                                                     if (document.getElementById("lcgh-bubble")) return false;
+                                                                     // Minimal styles
+                                                                     const existing = document.getElementById("lcgh-styles-inline");
+                                                                     if (!existing) {
+                                                                         const css = `
+                                                                             #lcgh-bubble { position: fixed; right: 18px; bottom: 120px; width:56px; height:56px; border-radius:50%; background:#127c5a; color:#fff; display:flex; align-items:center; justify-content:center; z-index:2147483651; cursor:grab; touch-action:none; }
+                                                                             #lcgh-bubble .lcgh-close { position:absolute; top:4px; right:4px; width:18px; height:18px; border-radius:50%; background:rgba(0,0,0,0.35); color:#fff; display:flex; align-items:center; justify-content:center; font-size:12px; cursor:pointer; }
+                                                                             #lcgh-toast { position: fixed; right:18px; bottom:190px; background: rgba(17,24,39,0.95); color:#fff; padding:8px 12px; border-radius:8px; z-index:2147483651; display:none; }
+                                                                         `;
+                                                                         const s = document.createElement("style");
+                                                                         s.id = "lcgh-styles-inline";
+                                                                         s.textContent = css;
+                                                                         (document.head || document.documentElement).appendChild(s);
+                                                                     }
+                                                                     // Create wrapper
+                                                                     const wrapper = document.createElement("div");
+                                                                     wrapper.id = "lcgh-bubble";
+                                                                     wrapper.title = "Upload solution to GitHub";
+                                                                     wrapper.tabIndex = -1;
+                                                                     wrapper.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L12 22" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9L12 2L19 9" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                                                                     // close button
+                                                                     const close = document.createElement("div");
+                                                                     close.className = "lcgh-close";
+                                                                     close.textContent = "×";
+                                                                     close.addEventListener("click", (ev) => {
+                                                                         try { ev.stopPropagation(); wrapper.style.display = "none"; sessionStorage.setItem("lcgh-bubble-hidden", "1"); } catch (e) {}
+                                                                     });
+                                                                     wrapper.appendChild(close);
+                                                                     // append toast
+                                                                     if (!document.getElementById("lcgh-toast")) {
+                                                                         const toast = document.createElement("div");
+                                                                         toast.id = "lcgh-toast";
+                                                                         document.body.appendChild(toast);
+                                                                     }
+                                                                     // attach minimal click handler to message background (use postMessage to background if needed)
+                                                                     wrapper.addEventListener("click", () => {
+                                                                         try {
+                                                                             console.log("lcgh: fallback-bubble clicked");
+                                                                             // attempt to send a message via window.postMessage for content script consumers
+                                                                             window.postMessage({ lcghAction: "bubbleClicked" }, "*");
+                                                                         } catch (e) {}
+                                                                     });
+                                                                     document.body.appendChild(wrapper);
+                                                                     console.log("lcgh: fallback bubble injected");
+                                                                     return true;
+                                                                 } catch (e) {
+                                                                     console.log("lcgh: fallback injection error", e && e.message);
+                                                                     return false;
+                                                                 }
+                                                             },
+                                                         },
+                                                         (fallbackRes) => {
+                                                             if (chrome.runtime.lastError) {
+                                                                 log("fallback injection failed:", chrome.runtime.lastError.message);
+                                                             } else {
+                                                                 log("fallback injection executed", fallbackRes && fallbackRes[0] && typeof fallbackRes[0].result !== "undefined" ? { injected: !!fallbackRes[0].result } : {});
+                                                             }
+                                                         }
+                                                     );
+                                                 } catch (e) {
+                                                     log("fallback executeScript error", e && e.message);
+                                                 }
+                                             }
+                                         }
+                                     }
+                                 );
+                             } catch (e) {
+                                 log("diagnostic executeScript error", e && e.message);
+                             }
+                         }
+                     );
+                 } catch (e) {
+                     log("scripting.executeScript threw", e && e.message);
+                 }
+             } catch (e) {
+                 log("injectContentScriptIfLeetCode inner error", e && e.message);
+             }
+         });
+     } catch (e) {
+         log("injectContentScriptIfLeetCode error", e && e.message);
+     }
+ }
+ 
+ // Inject when a tab updates (navigation complete)
+ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+     try {
+         if (changeInfo && (changeInfo.status === "complete" || changeInfo.status === "loading")) {
+             injectContentScriptIfLeetCode(tabId);
+         }
+     } catch (e) {
+         log("tabs.onUpdated handler error", e && e.message);
+     }
+ });
+ 
+ // Inject when user switches active tab
+ chrome.tabs.onActivated.addListener(async (activeInfo) => {
+     try {
+         if (!activeInfo || !activeInfo.tabId) return;
+         injectContentScriptIfLeetCode(activeInfo.tabId);
+     } catch (e) {
+         log("tabs.onActivated handler error", e && e.message);
+     }
+ });
+ 
+ // Also attempt to inject to the currently active tab at startup as a best-effort
+ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+     try {
+         if (tabs && tabs.length) {
+             const tab = tabs[0];
+             if (tab && tab.id) injectContentScriptIfLeetCode(tab.id);
+         }
+     } catch (e) {
+         log("initial active tab injection error", e && e.message);
+     }
+ });

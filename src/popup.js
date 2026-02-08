@@ -11,7 +11,7 @@ function updateStatus(msg, isError = false) {
   const el = $('status');
   if (!el) return;
   el.textContent = msg || '';
-  el.style.color = isError ? '#9b2c2c' : '#1a202c';
+  el.style.color = isError ? 'var(--error)' : 'var(--text-muted)';
   console.log('[popup] status:', msg);
 }
 
@@ -22,18 +22,6 @@ function updateAuthStatus(msg) {
   console.log('[popup] authStatus:', msg);
 }
 
-// sanitize HTML -> text for README generation
-function stripHtml(html) {
-  if (!html) return '';
-  try {
-    const d = document.createElement('div');
-    d.innerHTML = html;
-    return d.textContent || d.innerText || '';
-  } catch (e) {
-    console.warn('stripHtml failed', e && e.message);
-    return String(html);
-  }
-}
 
 function setSignInEnabled(enabled) {
   const btn = $('signInBtn');
@@ -94,12 +82,8 @@ function startDeviceFlow() {
   updateAuthStatus('Starting authorization...');
   updateStatus('Requesting sign-in code...');
 
-  const remember = !!$('rememberMe').checked;
-
-  // warn user if they didn't opt to persist token
-  if (!remember) {
-    updateStatus('Warning: token will NOT be saved if you close this popup. Keep it open until authorization completes or check "Remember me".', true);
-  }
+  // Always remember the token by default (no checkbox needed)
+  const remember = true;
 
   // show placeholder immediately
   showDeviceInfo({ user_code: 'Waiting…', verification_uri: '', verification_uri_complete: '' });
@@ -135,7 +119,7 @@ function startDeviceFlow() {
       const url = resp.device.verification_uri_complete || resp.device.verification_uri || '';
       if (url) {
         try {
-          chrome.tabs.create({ url, active: false }, () => {});
+          chrome.tabs.create({ url, active: false }, () => { });
         } catch (e) {
           // ignore
         }
@@ -178,8 +162,7 @@ function bindUI() {
 
   const help = $('helpLink'); if (help) help.addEventListener('click', (e) => {
     e.preventDefault();
-    if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
-    else chrome.tabs.create({ url: chrome.runtime.getURL('src/DEVICE_FLOW_SETUP.md') });
+    chrome.tabs.create({ url: chrome.runtime.getURL('src/help.html') });
   });
 }
 
@@ -194,11 +177,43 @@ async function onDetect() {
     const tabs = await queryActiveTab();
     if (!tabs || tabs.length === 0) throw new Error('No active tab found');
     const tabId = tabs[0].id;
-    try { await new Promise((resolve) => chrome.scripting.executeScript({ target: { tabId }, files: ['src/content.js'] }, () => resolve())); } catch (e) {}
-    await new Promise(r => setTimeout(r, 250));
+
+    // Smart Detection: Try to ping the script first. If no response, inject it.
+    const isScriptReady = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
+        if (chrome.runtime.lastError || !response || !response.success) {
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+
+    if (!isScriptReady) {
+      console.log('[popup] Content script not found. Injecting...');
+      try {
+        await new Promise((resolve, reject) => {
+          chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['src/content.js']
+          }, () => {
+            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+            else resolve();
+          });
+        });
+        // Give it a moment to initialize listeners
+        await new Promise(r => setTimeout(r, 300));
+      } catch (e) {
+        console.warn('Manual injection failed (might already be there or restricted page):', e.message);
+      }
+    }
+
+    // Now request the data
     chrome.tabs.sendMessage(tabId, { action: 'getProblemData' }, (response) => {
-      if (chrome.runtime.lastError || !response || !response.success) {
-        updateStatus('Unable to detect problem on this tab.', true);
+      if (chrome.runtime.lastError || !response || !response.success || !response.data || !response.data.title) {
+        const errorMsg = (response && response.message) ||
+          (response && response.data && !response.data.title ? 'Problem title not found. Try refreshing the page.' : 'Unable to detect problem on this tab.');
+        updateStatus(errorMsg, true);
         showMeta(null);
         return;
       }
@@ -210,88 +225,166 @@ async function onDetect() {
   }
 }
 
+const DIFF_ICONS = {
+  easy: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="white"/></svg>`,
+  medium: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`,
+  hard: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  unknown: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
+};
+
 function showMeta(data) {
+  const statusEl = $('submissionStatus');
+  const diffIconEl = $('difficultyIcon');
+  const metaBody = $('metaBody');
+
+  if (statusEl) {
+    statusEl.style.display = 'none';
+    statusEl.textContent = '';
+  }
+
   if (!data) {
+    if (diffIconEl) {
+      diffIconEl.className = 'diff-icon unknown';
+      diffIconEl.innerHTML = DIFF_ICONS.unknown;
+    }
     $('metaTitle').textContent = 'No problem detected';
-    $('metaIdUrl').textContent = '';
-    $('metaDifficulty').textContent = '';
-    $('metaTags').innerHTML = '';
-    $('metaLangExt').textContent = '';
-    $('detectedPath').textContent = '/0000-unknown/';
+    if (metaBody) metaBody.classList.add('hidden');
     lastProblemData = null;
     return;
   }
+
   lastProblemData = data;
-  $('metaTitle').textContent = `${data.id || '0000'} — ${data.title}`;
-  $('metaIdUrl').textContent = data.url || '';
-  $('metaDifficulty').textContent = data.difficulty ? `Difficulty: ${data.difficulty}` : '';
+  if (metaBody) {
+    metaBody.classList.remove('hidden');
+    metaBody.classList.remove('pop-in');
+    void metaBody.offsetWidth; // force reflow
+    metaBody.classList.add('pop-in');
+  }
+
+  // Handle Title
+  $('metaTitle').textContent = `${data.id ? data.id + ' — ' : ''}${data.title}`;
+
+  // Handle Platform
+  if ($('metaPlatform')) {
+    $('metaPlatform').textContent = data.platform || 'LeetCode';
+    $('metaPlatform').style.display = 'inline-block';
+  }
+
+  // Handle Difficulty & Icon
+  const rawDiff = (data.difficulty || 'unknown').toLowerCase();
+  const diffClass = ['easy', 'medium', 'hard'].includes(rawDiff) ? rawDiff : 'unknown';
+
+  if (diffIconEl) {
+    diffIconEl.className = `diff-icon ${diffClass}`;
+    diffIconEl.innerHTML = DIFF_ICONS[diffClass] || DIFF_ICONS.unknown;
+  }
+
+  $('metaDifficulty').textContent = data.difficulty || 'Unknown';
+  $('metaDifficulty').className = `badge ${diffClass}`;
+
+  // Handle Tags
   $('metaTags').innerHTML = (data.tags || []).map(t => `<span class="tag">${t}</span>`).join(' ');
-  $('metaLangExt').textContent = `Detected language: ${data.language || 'unknown'} — .${data.extension || 'txt'}`;
+
+  // Path
   $('detectedPath').textContent = `/${data.folderName}/`;
+
+  // Check if solution code exists
+  if (!data.code || data.code.trim().length === 0) {
+    updateStatus('Warning: No solution code detected! Extraction failed.', true);
+  }
+
+  // Check GitHub for existing submission
+  const owner = ($('owner') && $('owner').value.trim()) || '';
+  const repo = ($('repo') && $('repo').value.trim()) || '';
+  const branch = ($('branch') && $('branch').value.trim()) || 'main';
+  const fileOrg = (document.getElementById('fileOrg') && document.getElementById('fileOrg').value) || 'folder';
+
+  if (owner && repo && data.id) {
+    if (statusEl) {
+      statusEl.textContent = 'Checking GitHub...';
+      statusEl.style.display = 'block';
+      statusEl.style.color = 'var(--text-muted)';
+    }
+
+    const langSel = document.getElementById('language');
+    const chosenExt = (langSel && langSel.value) ? langSel.value : (data.extension || 'txt');
+    const checkData = { ...data, extension: chosenExt };
+
+    chrome.runtime.sendMessage({
+      action: 'checkSubmission',
+      problemData: checkData,
+      owner,
+      repo,
+      branch,
+      fileOrg
+    }, (resp) => {
+      if (!statusEl) return;
+      if (chrome.runtime.lastError) {
+        statusEl.style.display = 'none';
+        return;
+      }
+      // If we are still viewing the same problem (race condition check)
+      if (lastProblemData && lastProblemData.id === data.id) {
+        if (resp && resp.success && resp.exists) {
+          statusEl.textContent = `✓ Solution exists in ${resp.repo}`;
+          statusEl.style.color = 'var(--accent)';
+          statusEl.style.display = 'block';
+        } else {
+          statusEl.style.display = 'none';
+        }
+      }
+    });
+  }
 }
 
-function buildReadme(problemData) {
-  const title = problemData.title || '';
-  const url = problemData.url || '';
-  const tags = (problemData.tags || []).join(', ');
-  const difficulty = problemData.difficulty || '';
-  const description = stripHtml(problemData.contentHtml || '').trim();
-  const lines = [];
-  lines.push(`# ${title}`);
-  lines.push('');
-  if (difficulty) lines.push(`**Difficulty:** ${difficulty}`);
-  if (tags) lines.push(`**Tags:** ${tags}`);
-  if (url) lines.push(`**URL:** ${url}`);
-  lines.push('');
-  if (description) {
-    lines.push('## Problem');
-    lines.push('');
-    lines.push(description);
-    lines.push('');
-  }
-  lines.push('---');
-  lines.push('_Generated by CodeBridge extension_');
-  return lines.join('\n');
-}
+
 
 function onSave() {
   updateStatus('Preparing upload...');
   if (!lastProblemData) { updateStatus('No detected problem. Click Detect first.', true); return; }
+
+  if (!lastProblemData.code || lastProblemData.code.trim().length === 0) {
+    updateStatus('Error: Solution code not found. Cannot upload.', true);
+    return;
+  }
   const owner = $('owner').value.trim();
   const repo = $('repo').value.trim();
   const branch = $('branch').value.trim() || 'main';
   const allowUpdate = $('allowUpdate').checked;
   if (!owner || !repo) { updateStatus('Please provide GitHub owner and repository.', true); return; }
 
-  // Persist current owner/repo/branch and language so user isn't asked again
+
+
+  // Determine file organization
+  const fileOrg = (document.getElementById('fileOrg') && document.getElementById('fileOrg').value) || 'folder';
+
+  // Use user-selected extension if available, otherwise detected
   const langSel = document.getElementById('language');
   const chosenExt = (langSel && langSel.value) ? langSel.value : (lastProblemData.extension || 'txt');
-  try {
-    chrome.storage.local.set({ github_owner: owner, github_repo: repo, github_branch: branch, github_language: chosenExt }, () => {
-      console.log('[popup] saved owner/repo/branch/language to storage');
-    });
-  } catch (e) {
-    console.warn('[popup] failed to save defaults', e && e.message);
-  }
 
-  const folder = lastProblemData.folderName;
-  const solutionName = `solution.${chosenExt}`;
-  const solutionContent = lastProblemData.code || '';
-  const readmeContent = buildReadme(lastProblemData);
-  const payload = { action: 'uploadFiles', owner, repo, branch, folder, files: [
-    { path: `${folder}/${solutionName}`, content: solutionContent, isBase64: false },
-    { path: `${folder}/README.md`, content: readmeContent, isBase64: false }
-  ], allowUpdate };
+  const problemData = {
+    ...lastProblemData,
+    extension: chosenExt
+  };
+
+  const payload = {
+    action: 'prepareAndUpload',
+    problemData,
+    owner,
+    repo,
+    branch,
+    fileOrg,
+    allowUpdate
+  };
 
   chrome.runtime.sendMessage(payload, (resp) => {
     if (chrome.runtime.lastError) { updateStatus('Background request failed: ' + chrome.runtime.lastError.message, true); return; }
     if (!resp) { updateStatus('No response from background', true); return; }
     if (resp.success) {
       updateStatus('Upload succeeded');
-      // remember user choices if they checked rememberMe (separate from token)
-      if (!!$('rememberMe').checked) {
-        chrome.storage.local.set({ github_owner: owner, github_repo: repo, github_branch: branch, remember_me: true });
-      }
+      // Refresh meta view to show the new "Submitted" status immediately
+      if (lastProblemData) showMeta(lastProblemData);
+      // settings are auto-saved by persistPopupSettings
     } else {
       updateStatus('Upload failed: ' + (resp.message || 'unknown'), true);
     }
@@ -302,20 +395,73 @@ document.addEventListener('DOMContentLoaded', () => {
   bindUI();
   // default: hide device panel until auth flow starts/shows it
   clearDeviceInfo();
-  // load defaults then check auth status (also restore language preference)
-  chrome.storage.local.get(['github_owner','github_repo','github_branch','remember_me','github_language'], (items) => {
+
+  // helper: persist popup settings with debounce to avoid excessive writes
+  let _saveOptsTimer = null;
+  function persistPopupSettings() {
+    if (_saveOptsTimer) clearTimeout(_saveOptsTimer);
+    _saveOptsTimer = setTimeout(() => {
+      try {
+        const owner = ($('owner') && $('owner').value.trim()) || '';
+        const repo = ($('repo') && $('repo').value.trim()) || '';
+        const branch = ($('branch') && $('branch').value.trim()) || '';
+        const langSel = document.getElementById('language');
+        const lang = (langSel && langSel.value) ? langSel.value : '';
+        const fileOrgSel = document.getElementById('fileOrg');
+        const fileOrg = (fileOrgSel && fileOrgSel.value) ? fileOrgSel.value : 'folder';
+        const allowUpdate = !!(document.getElementById('allowUpdate') && document.getElementById('allowUpdate').checked);
+        const showBubble = !!(document.getElementById('showBubble') && document.getElementById('showBubble').checked);
+        chrome.storage.local.set({
+          github_owner: owner,
+          github_repo: repo,
+          github_branch: branch,
+          github_language: lang,
+          github_file_structure: fileOrg,
+          allowUpdateDefault: allowUpdate,
+          showBubble: showBubble
+        }, () => {
+          console.log('[popup] persisted settings');
+        });
+      } catch (e) { console.warn('[popup] persist failed', e && e.message); }
+    }, 250);
+  }
+
+  // load defaults then check auth status (also restore language & allowUpdate preference)
+  chrome.storage.local.get(['github_owner', 'github_repo', 'github_branch', 'github_language', 'github_file_structure', 'allowUpdateDefault', 'showBubble'], (items) => {
     if (items) {
       if (items.github_owner) $('owner').value = items.github_owner;
       if (items.github_repo) $('repo').value = items.github_repo;
       if (items.github_branch) $('branch').value = items.github_branch;
-      $('rememberMe').checked = !!items.remember_me;
+      if (typeof items.allowUpdateDefault !== 'undefined' && document.getElementById('allowUpdate')) {
+        document.getElementById('allowUpdate').checked = !!items.allowUpdateDefault;
+      }
+      if (typeof items.showBubble !== 'undefined' && document.getElementById('showBubble')) {
+        try { document.getElementById('showBubble').checked = !!items.showBubble; } catch (e) { }
+      }
       if (items.github_language) {
         const sel = document.getElementById('language');
         if (sel) {
           try { sel.value = items.github_language; sel.dataset.userSet = '1'; } catch (e) { /* ignore */ }
         }
       }
+      if (items.github_file_structure) {
+        const sel = document.getElementById('fileOrg');
+        if (sel) {
+          try { sel.value = items.github_file_structure; } catch (e) { /* ignore */ }
+        }
+      }
     }
+
+    // attach auto-save listeners so changes persist immediately
+    try {
+      const ownerEl = $('owner'); if (ownerEl) ownerEl.addEventListener('input', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const repoEl = $('repo'); if (repoEl) repoEl.addEventListener('input', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const branchEl = $('branch'); if (branchEl) branchEl.addEventListener('input', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const langEl = document.getElementById('language'); if (langEl) langEl.addEventListener('change', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const fileOrgEl = document.getElementById('fileOrg'); if (fileOrgEl) fileOrgEl.addEventListener('change', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const allowEl = document.getElementById('allowUpdate'); if (allowEl) allowEl.addEventListener('change', persistPopupSettings);
+      const showEl = document.getElementById('showBubble'); if (showEl) showEl.addEventListener('change', persistPopupSettings);
+    } catch (e) { /* ignore */ }
 
     // Try to auto-detect the problem immediately when popup opens to reduce clicks.
     // This runs regardless of auth state and will populate metadata if the active tab is a LeetCode problem.
@@ -331,6 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // reveal workflow UI when signed in
       document.getElementById('authPanel') && document.getElementById('authPanel').classList.add('hidden');
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.remove('hidden');
+      document.getElementById('signOutBtn') && document.getElementById('signOutBtn').classList.remove('hidden');
       // auto-detect again once authenticated to ensure metadata is available
       try { onDetect(); } catch (e) { console.warn('auto-detect after auth failed', e && e.message); }
     });
@@ -345,6 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // show workflow panel
       document.getElementById('authPanel') && document.getElementById('authPanel').classList.add('hidden');
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.remove('hidden');
+      document.getElementById('signOutBtn') && document.getElementById('signOutBtn').classList.remove('hidden');
       // automatically detect problem after sign-in to prefill fields
       try { onDetect(); } catch (e) { console.warn('auto-detect after sign-in failed', e && e.message); }
     } else if (message.action === 'deviceFlowError') {
@@ -366,6 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
       updateAuthStatus('Signed out');
       document.getElementById('authPanel') && document.getElementById('authPanel').classList.remove('hidden');
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.add('hidden');
+      document.getElementById('signOutBtn') && document.getElementById('signOutBtn').classList.add('hidden');
       clearDeviceInfo();
       setSignInEnabled(true);
     }

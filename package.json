@@ -1,7 +1,7 @@
 {
   "name": "codebridge",
   "version": "1.0.0",
-  "description": "Exports solved LeetCode problems into a GitHub repository as organized folders with a solution file and README.",
+  "description": "Code Bridge: Effortlessly sync your solved problems from LeetCode, Codeforces, and HackerRank to GitHub. Organizes your solutions into clean, structured repository folders automatically.",
   "main": "background.js",
   "scripts": {
     "build": "node build.js",

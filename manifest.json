@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "LeetCode → GitHub Exporter",
+  "name": "Code Bridge",
   "version": "1.0.0",
-  "description": "Export solved LeetCode problems to a GitHub repository as organized folders with solution and README.",
+  "description": "Code Bridge: Effortlessly sync your solved problems from LeetCode, Codeforces, and HackerRank to GitHub. Organizes your solutions into clean, structured repository folders automatically.",
   "permissions": [
     "identity",
     "storage",
@@ -13,27 +13,36 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://leetcode.com/*",
+    "https://*.leetcode.com/*",
+    "https://*.codeforces.com/*",
+    "https://*.hackerrank.com/*",
     "https://github.com/*",
     "https://api.github.com/*"
   ],
   "background": {
-    "service_worker": "src/background.js",
+    "service_worker": "src/background/index.js",
     "type": "module"
   },
   "action": {
     "default_popup": "src/popup.html",
-    "default_title": "Save LeetCode solution to GitHub"
+    "default_title": "Save Coding Solution to GitHub"
   },
   "options_ui": {
     "page": "src/options.html",
     "open_in_tab": true
   },
-  "content_scripts": [
+  "web_accessible_resources": [
     {
-      "matches": ["https://leetcode.com/*"],
-      "js": ["src/content.js"],
-      "run_at": "document_idle"
+      "resources": [
+        "src/bridge.js",
+        "src/adapters/*.js",
+        "src/scrapers/*.js"
+      ],
+      "matches": [
+        "https://*.leetcode.com/*",
+        "https://*.codeforces.com/*",
+        "https://*.hackerrank.com/*"
+      ]
     }
   ],
   "icons": {

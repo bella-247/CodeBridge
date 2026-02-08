@@ -1,173 +1,175 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8" />
-        <meta
-            http-equiv="Content-Security-Policy"
-            content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
-        />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>CodeBridge</title>
-        <link rel="stylesheet" href="styles.css">
-    </head>
-    <body>
-        <div class="card">
-            <h2>CodeBridge</h2>
-            <p class="muted">
-                Save your leetcode progress on your github profile.
-            </p>
 
-            <div id="authPanel">
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Code Bridge</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="dark-theme">
+    <div class="app-container">
+        <header>
+            <div class="logo-container">
+                <div class="logo-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 8L3 12L7 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                        <path d="M17 8L21 12L17 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                        <path d="M14 4L10 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <h2>Code Bridge</h2>
+            </div>
+            <p class="muted">Engineering your portfolio.</p>
+        </header>
+
+        <main id="mainContent">
+            <!-- Auth Section -->
+            <section id="authPanel" class="glass-card">
                 <h3>Sign in</h3>
-                <button id="signInBtn" class="secondary" style="width: 100%">
-                    Sign in with GitHub
+                <button id="signInBtn" class="btn secondary full-width">
+                    <span class="btn-text">Authenticate with GitHub</span>
                 </button>
-                <button
-                    id="signOutBtn"
-                    class="primary hidden"
-                    style="width: 100%; margin-top: 6px"
-                >
-                    Sign out
-                </button>
-                <div class="inline" style="margin-top: 10px">
-                    <input id="rememberMe" type="checkbox" checked />
-                    <label for="rememberMe" style="margin: 0"
-                        >Remember me (stores token locally)</label
-                    >
+                <div class="inline-setting">
+                    <input id="showBubble" type="checkbox" checked />
+                    <label for="showBubble">Show upload bubble on platforms</label>
                 </div>
-                <div class="status" id="authStatus" aria-live="polite">
-                    Not signed in
-                </div>
+                <div class="status-badge" id="authStatus">Not signed in</div>
 
-                <div
-                    id="deviceInfo"
-                    class="hidden"
-                    role="status"
-                    aria-live="polite"
-                >
-                    <div style="font-weight: 600">GitHub tab opened</div>
-                    <p class="muted" style="margin: 4px 0 8px">
-                        A GitHub tab opened in the background. Go to that tab,
-                        paste the code below, and accept the authorization. Keep
-                        this popup open if you like.
-                    </p>
-                    <div class="muted" style="font-size: 12px">
-                        Verification URL:
-                        <a
-                            id="deviceUrl"
-                            href="#"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        ></a>
+                <div id="deviceInfo" class="hidden animate-fade-in">
+                    <div class="alert-info">
+                        <strong>GitHub tab opened</strong>
+                        <p>Paste the code below in the verification tab.</p>
                     </div>
-                    <div
-                        style="
-                            margin-top: 8px;
-                            display: flex;
-                            align-items: center;
-                            gap: 8px;
-                        "
-                    >
-                        <span class="code" id="deviceCode">—</span>
-                        <button id="copyCodeBtn" class="secondary">Copy</button>
-                        <button id="openUrlBtn" class="primary">
-                            Open tab
-                        </button>
+                    <div class="code-container">
+                        <span class="code-display" id="deviceCode">—</span>
+                        <div class="code-actions">
+                            <button id="copyCodeBtn" class="icon-btn" title="Copy">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                            </button>
+                            <button id="openUrlBtn" class="icon-btn" title="Open Link">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                    <polyline points="15 3 21 3 21 9"></polyline>
+                                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    <a id="deviceUrl" href="#" target="_blank" class="hidden"></a>
+                </div>
+            </section>
+
+            <!-- Workflow Section -->
+            <section id="workflowPanel" class="hidden animate-fade-in">
+                <div class="glass-card">
+                    <h3>Repository Configuration</h3>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label for="owner">Owner</label>
+                            <input id="owner" type="text" placeholder="Username" />
+                        </div>
+                        <div class="input-group">
+                            <label for="repo">Repository</label>
+                            <input id="repo" type="text" placeholder="Repo name" />
+                        </div>
+                    </div>
+
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label for="branch">Branch</label>
+                            <input id="branch" type="text" value="main" />
+                        </div>
+                        <div class="input-group">
+                            <div class="checkbox-inline">
+                                <input id="allowUpdate" type="checkbox" />
+                                <label for="allowUpdate"
+                                    style="text-transform:none; font-size:12px; margin:0">Overwrite</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label for="language">Language</label>
+                            <select id="language">
+                                <option value="py">Python</option>
+                                <option value="js">JavaScript</option>
+                                <option value="ts">TypeScript</option>
+                                <option value="java">Java</option>
+                                <option value="cpp">C++</option>
+                                <option value="c">C</option>
+                                <option value="cs">C#</option>
+                                <option value="go">Go</option>
+                                <option value="rs">Rust</option>
+                                <option value="txt">Txt</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="fileOrg">Organization</label>
+                            <select id="fileOrg">
+                                <option value="folder">Folders</option>
+                                <option value="flat">Flat Files</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <div id="workflowPanel" class="card hidden">
-            <h3>Detect & upload</h3>
-            <div class="input-row">
-                <div class="col">
-                    <label for="owner">Owner</label>
-                    <input
-                        id="owner"
-                        type="text"
-                        placeholder="GitHub user or org"
-                    />
-                </div>
-                <div class="col">
-                    <label for="repo">Repository</label>
-                    <input
-                        id="repo"
-                        type="text"
-                        placeholder="Repository name"
-                    />
-                </div>
-            </div>
-            <div class="input-row" style="margin-top: 4px">
-                <div class="col">
-                    <label for="branch">Branch</label>
-                    <input id="branch" type="text" value="main" />
-                </div>
-                <div class="col inline" style="justify-content: flex-end">
-                    <input id="allowUpdate" type="checkbox" />
-                    <label for="allowUpdate" style="margin: 0"
-                        >Allow overwrite</label
-                    >
-                </div>
-            </div>
+                <div class="problem-container glass-card" id="metaBox">
+                    <div class="meta-header">
+                        <div id="difficultyIcon" class="diff-icon unknown"></div>
+                        <div class="title-area">
+                            <strong id="metaTitle">No problem detected</strong>
+                            <div id="submissionStatus" class="submission-status"></div>
+                        </div>
+                    </div>
 
-            <div class="input-row" style="margin-top: 8px">
-                <div class="col">
-                    <label for="language">Language / extension</label>
-                    <select id="language">
-                        <option value="py">Python (.py)</option>
-                        <option value="js">JavaScript (.js)</option>
-                        <option value="ts">TypeScript (.ts)</option>
-                        <option value="java">Java (.java)</option>
-                        <option value="cpp">C++ (.cpp)</option>
-                        <option value="c">C (.c)</option>
-                        <option value="cs">C# (.cs)</option>
-                        <option value="go">Go (.go)</option>
-                        <option value="rs">Rust (.rs)</option>
-                        <option value="rb">Ruby (.rb)</option>
-                        <option value="php">PHP (.php)</option>
-                        <option value="txt">Other (.txt)</option>
-                    </select>
+                    <div id="metaBody" class="animate-fade-in">
+                        <div class="meta-info">
+                            <span id="metaPlatform" class="badge secondary"></span>
+                            <span id="metaDifficulty" class="badge"></span>
+                            <div id="metaTags" class="tag-cloud"></div>
+                        </div>
+                        <div class="path-info">
+                            <label>Destination Folder</label>
+                            <code id="detectedPath">/0000-unknown/</code>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            
-            <button
-                id="detectBtn"
-                class="secondary"
-                style="width: 100%; margin-top: 10px"
-            >
-                Detect current LeetCode problem
-            </button>
 
-            <div class="meta" id="metaBox">
-                <strong id="metaTitle">No problem detected</strong>
-                <div class="muted" id="metaIdUrl"></div>
-                <div class="muted" id="metaDifficulty"></div>
-                <div id="metaTags"></div>
-                <div class="muted" id="metaLangExt"></div>
-                <div class="muted" style="margin-top: 6px">
-                    Folder:
-                    <code id="detectedPath" class="code">/0000-unknown/</code>
+                <div class="actions">
+                    <button id="detectBtn" class="btn secondary">
+                        <span>Re-detect Problem</span>
+                    </button>
+                    <button id="saveBtn" class="btn primary full-width">
+                        <span>Save to GitHub</span>
+                    </button>
+                    <div class="status-msg" id="status"></div>
                 </div>
+            </section>
+        </main>
+
+        <footer>
+            <button id="signOutBtn" class="link-btn hidden">Sign Out</button>
+            <div style="display:flex; gap:12px;">
+                <a id="optionsLink" href="options.html" target="_blank" class="link-btn">Customize</a>
+                <a id="helpLink" href="#" class="link-btn">Help</a>
             </div>
+        </footer>
+    </div>
 
-            <button
-                id="saveBtn"
-                class="primary"
-                style="width: 100%; margin-top: 10px"
-            >
-                Save to GitHub
-            </button>
-            <div class="status" id="status"></div>
-            <a
-                id="helpLink"
-                class="link"
-                href="#"
-                style="display: inline-block; margin-top: 8px"
-                >Need help or instructions?</a
-            >
-        </div>
+    <script src="popup.js"></script>
+</body>
 
-        <script src="popup.js"></script>
-    </body>
 </html>
