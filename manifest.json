@@ -31,19 +31,6 @@
     "page": "src/options.html",
     "open_in_tab": true
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://*.leetcode.com/*",
-        "https://*.codeforces.com/*",
-        "https://*.hackerrank.com/*"
-      ],
-      "js": [
-        "src/content.js"
-      ],
-      "run_at": "document_idle"
-    }
-  ],
   "web_accessible_resources": [
     {
       "resources": [

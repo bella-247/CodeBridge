@@ -132,10 +132,20 @@
       </div>
 
       <div class="glass-card template-field">
+        <label>Solution File Header (Comment)</label>
+        <textarea id="templateSolution" placeholder="[title]\n[url]\n[difficulty]"></textarea>
+        <div class="vars-guide">
+          Available: <code>[title]</code>, <code>[id]</code>, <code>[difficulty]</code>, <code>[url]</code>. This will
+          be automatically wrapped in comments based on the language.
+        </div>
+      </div>
+
+      <div class="glass-card template-field">
         <label>README Template (Markdown)</label>
         <textarea id="templateReadme" placeholder="# [title]\n\n**Difficulty:** [difficulty]\n\n[url]"></textarea>
         <div class="vars-guide">
-          Available: <code>[title]</code>, <code>[id]</code>, <code>[difficulty]</code>, <code>[url]</code>
+          Available: <code>[title]</code>, <code>[id]</code>, <code>[difficulty]</code>, <code>[url]</code>,
+          <code>[description]</code>
         </div>
       </div>
 

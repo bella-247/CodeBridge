@@ -1,5 +1,28 @@
 import { formatAsComment } from "./languageUtils.js";
 import { fillTemplate } from "./templateEngine.js";
+import { TemplateManager } from "./templateManager.js";
+
+/**
+ * Clean HTML content to plain text / simple markdown
+ */
+export function cleanDescription(html) {
+    if (!html) return "";
+    return html
+        // Strip MathJax script containers first
+        .replace(/<script type="math\/tex">([\s\S]*?)<\/script>/gi, " $1 ")
+        .replace(/<(p|div|br|li|h1|h2|h3|h4|h5|h6)[^>]*>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        // Codeforces specific: $$$x$$$ -> $x$
+        .replace(/\$\$\$/g, "$")
+        // General LaTeX: \( x \) -> $x$, \[ x \] -> $$x$$
+        .replace(/\\\(|\\\)/g, "$")
+        .replace(/\\\[|\\\]/g, "$$")
+        // Cleanup MathJax noise patterns like MathJax.Hub or [MathJax] artifacts
+        .replace(/(MathJax|Math)\.[^ \n]+/gi, "")
+        .replace(/\[MathJax\]/gi, "")
+        .replace(/\n\s*\n+/g, "\n\n")
+        .trim();
+}
 
 /**
  * Generate the README markdown content
@@ -9,34 +32,17 @@ import { fillTemplate } from "./templateEngine.js";
  */
 export function buildReadmeContent(problemData, template = null) {
     try {
+        const description = cleanDescription(problemData.contentHtml || "");
+        const dataForTemplate = { ...problemData, description };
+
         if (template) {
-            return fillTemplate(template, problemData);
+            return TemplateManager.buildReadme(dataForTemplate, template);
         }
 
         const title = problemData.title || "";
         const url = problemData.url || "";
         const tags = (problemData.tags || []).join(", ");
         const difficulty = problemData.difficulty || "";
-
-        let description = "";
-        if (problemData.contentHtml) {
-            // Intelligent clean: preserve block elements as newlines
-            description = problemData.contentHtml
-                // Strip MathJax script containers first
-                .replace(/<script type="math\/tex">([\s\S]*?)<\/script>/gi, " $1 ")
-                .replace(/<(p|div|br|li|h1|h2|h3|h4|h5|h6)[^>]*>/gi, "\n")
-                .replace(/<[^>]+>/g, "")
-                // Codeforces specific: $$$x$$$ -> $x$
-                .replace(/\$\$\$/g, "$")
-                // General LaTeX: \( x \) -> $x$, \[ x \] -> $$x$$
-                .replace(/\\\(|\\\)/g, "$")
-                .replace(/\\\[|\\\]/g, "$$")
-                // Cleanup MathJax noise patterns like MathJax.Hub or [MathJax] artifacts
-                .replace(/(MathJax|Math)\.[^ \n]+/gi, "")
-                .replace(/\[MathJax\]/gi, "")
-                .replace(/\n\s*\n+/g, "\n\n")
-                .trim();
-        }
 
         const lines = [];
         lines.push(`# ${title}`);
@@ -69,8 +75,15 @@ export function buildReadmeContent(problemData, template = null) {
  * @returns {Array<{path: string, content: string}>}
  */
 export function generateUploadFiles(strategy, problemData, chosenExt, templates = {}) {
-    const solutionContent = problemData.code || "";
+    const description = cleanDescription(problemData.contentHtml || "");
+    const dataWithDesc = { ...problemData, description };
+
+    const solutionBody = problemData.code || "";
     const readmeContent = buildReadmeContent(problemData, templates.readme);
+
+    // Build the header based on user template
+    const header = TemplateManager.buildSolutionHeader(dataWithDesc, templates.solutionHeader, chosenExt);
+    const solutionContent = header ? `${header}\n\n${solutionBody}` : solutionBody;
 
     // Strategy: FOLDER (Default)
     if (strategy !== 'flat') {
@@ -79,11 +92,13 @@ export function generateUploadFiles(strategy, problemData, chosenExt, templates 
 
         if (templates.path) {
             solutionPath = fillTemplate(templates.path, { ...problemData, extension: chosenExt });
-            // If user provided a path template, we might not know where to put the README 
-            // unless they provide a specific README path template too. 
-            // For now, if path template is used, we'll put README in the same dir as the solution.
-            const dir = solutionPath.substring(0, solutionPath.lastIndexOf('/'));
-            readmePath = dir ? `${dir}/README.md` : `README-${problemData.folderName}.md`;
+            const lastSlash = solutionPath.lastIndexOf('/');
+            if (lastSlash !== -1) {
+                const dir = solutionPath.substring(0, lastSlash);
+                readmePath = `${dir}/README.md`;
+            } else {
+                readmePath = `README-${problemData.folderName}.md`;
+            }
         }
 
         return [
@@ -98,10 +113,10 @@ export function generateUploadFiles(strategy, problemData, chosenExt, templates 
         flatPath = fillTemplate(templates.path, { ...problemData, extension: chosenExt });
     }
 
-    const descriptionComment = formatAsComment(readmeContent, chosenExt);
-    const combinedContent = `${descriptionComment}\n\n${solutionContent}`;
-
+    // For flat strategy, we usually don't have a separate README, but we already prepended the header to solutionContent.
+    // If the user REALLY wants the full README content for flat files, we can use the old behavior or let them decide.
+    // For now, let's keep it consistent: Header + Code.
     return [
-        { path: flatPath, content: combinedContent }
+        { path: flatPath, content: solutionContent }
     ];
 }

@@ -11,7 +11,8 @@ function loadOptions() {
         "github_branch",
         "template_commit",
         "template_path",
-        "template_readme"
+        "template_readme",
+        "template_solution"
     ], (items) => {
         if (items) {
             if (items.github_owner) $("owner").value = items.github_owner;
@@ -21,6 +22,7 @@ function loadOptions() {
             if (items.template_commit) $("templateCommit").value = items.template_commit;
             if (items.template_path) $("templatePath").value = items.template_path;
             if (items.template_readme) $("templateReadme").value = items.template_readme;
+            if (items.template_solution) $("templateSolution").value = items.template_solution;
         }
     });
 }
@@ -33,6 +35,7 @@ function saveOptions() {
     const templateCommit = $("templateCommit").value.trim();
     const templatePath = $("templatePath").value.trim();
     const templateReadme = $("templateReadme").value.trim();
+    const templateSolution = $("templateSolution").value.trim();
 
     const toSave = {
         github_owner: owner,
@@ -40,7 +43,8 @@ function saveOptions() {
         github_branch: branch,
         template_commit: templateCommit,
         template_path: templatePath,
-        template_readme: templateReadme
+        template_readme: templateReadme,
+        template_solution: templateSolution
     };
 
     chrome.storage.local.set(toSave, () => {
@@ -56,6 +60,7 @@ function resetTemplates() {
         $("templateCommit").value = "Solved [id] - [title] ([difficulty])";
         $("templatePath").value = "[id]-[slug]/solution.[ext]";
         $("templateReadme").value = "# [title]\n\n**Difficulty:** [difficulty]\n\n**URL:** [url]\n\n## Problem\n\n[description]";
+        $("templateSolution").value = "[title]\n\n[url]\n\nDifficulty: [difficulty]";
         saveOptions();
     }
 }

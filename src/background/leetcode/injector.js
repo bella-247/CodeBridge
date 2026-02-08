@@ -40,7 +40,7 @@ function injectContentScript(tabId) {
                         {
                             target: { tabId, allFrames: true },
                             files: ["src/content.js"],
-                            world: "MAIN",
+                            world: "ISOLATED",
                         },
                         (injectionResults) => {
                             if (chrome.runtime.lastError) {

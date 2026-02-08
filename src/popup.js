@@ -180,8 +180,9 @@ async function onDetect() {
     try { await new Promise((resolve) => chrome.scripting.executeScript({ target: { tabId }, files: ['src/content.js'] }, () => resolve())); } catch (e) { }
     await new Promise(r => setTimeout(r, 250));
     chrome.tabs.sendMessage(tabId, { action: 'getProblemData' }, (response) => {
-      if (chrome.runtime.lastError || !response || !response.success) {
-        updateStatus('Unable to detect problem on this tab.', true);
+      if (chrome.runtime.lastError || !response || !response.success || !response.data || !response.data.title) {
+        const errorMsg = (response && response.message) || (response && response.data && !response.data.title ? 'Problem title not found. Try refreshing the page.' : 'Unable to detect problem on this tab.');
+        updateStatus(errorMsg, true);
         showMeta(null);
         return;
       }

@@ -49,31 +49,29 @@ export const CodeforcesScraper = {
      */
     async fetchMetadata() {
         try {
-            const titleEl = document.querySelector('.problem-statement .header .title');
+            console.log("[CodeBridge] CodeforcesScraper: Scraping metadata...");
+
+            // Robust title selection
+            const titleEl = document.querySelector('.problem-statement .header .title') ||
+                document.querySelector('.header .title') ||
+                document.querySelector('.title') ||
+                document.querySelector('h1');
+
             const title = titleEl ? titleEl.innerText.trim() : document.title;
 
-            const tags = Array.from(document.querySelectorAll('.tag-box')).map(el => el.innerText.trim());
+            const tags = Array.from(document.querySelectorAll('.tag-box'))
+                .map(el => el.innerText.trim())
+                .filter(t => !!t);
 
             const difficultyTag = tags.find(t => t.startsWith('*'));
             const difficulty = difficultyTag ? difficultyTag.replace('*', '') : "Unknown";
 
-            const contentEl = document.querySelector('.problem-statement');
+            const contentEl = document.querySelector('.problem-statement') || document.querySelector('#pageContent');
             let contentHtml = "";
             if (contentEl) {
-                // Clone to clean without touching live page
                 const clone = contentEl.cloneNode(true);
-
-                // Remove MathJax artifacts and other junk
-                const junkSelectors = [
-                    '.MathJax_Preview', '.MathJax_Display', '.MathJax',
-                    'script', 'style', '.mjx-chtml', '.mjx-assistive-mm',
-                    '.header', // Codeforces header usually contains redundant title/limits
-                    '.sample-tests .title', // Remove "Example" or "Sample tests" text
-                ];
-                junkSelectors.forEach(s => {
-                    clone.querySelectorAll(s).forEach(n => n.remove());
-                });
-
+                const junk = ['.MathJax_Preview', '.MathJax_Display', '.MathJax', 'script', 'style', '.header', '.sample-tests .title', '.button-up'];
+                junk.forEach(s => clone.querySelectorAll(s).forEach(n => n.remove()));
                 contentHtml = clone.innerHTML;
             }
 
@@ -86,8 +84,6 @@ export const CodeforcesScraper = {
             if (idMatch) {
                 const letter = idMatch[1];
                 cleanTitle = idMatch[2];
-                // If the slug already contains the letter (like 1850A), use it.
-                // If slug is just a number, append the letter.
                 if (urlSlug.endsWith(letter)) {
                     id = urlSlug;
                 } else if (!isNaN(urlSlug)) {
@@ -97,65 +93,106 @@ export const CodeforcesScraper = {
 
             return {
                 id: id,
-                slug: id, // compatibility
+                slug: id,
                 title: cleanTitle,
                 contentHtml: contentHtml && contentHtml.length > 50 ? contentHtml : (contentEl ? contentEl.innerHTML : ""),
                 difficulty: difficulty,
                 tags: tags.map(t => t.replace('*', '').trim()),
+                platform: "Codeforces"
             };
         } catch (e) {
-            console.error("Codeforces DOM scrape for metadata failed", e);
+            console.error("[CodeBridge] Codeforces metadata scrape failed:", e);
             return null;
         }
     },
 
     /**
      * Fetches a submission page and extracts the source code and language.
-     * @param {string} submissionUrl - The URL of the submission to fetch.
-     * @returns {Promise<{code: string, language: string}|null>}
+     * Pessimistic approach with robust validation as requested.
      */
     async extractSolution(submissionUrl) {
         if (!submissionUrl) {
-            console.warn("No submission URL provided to extractSolution.");
+            console.warn("[CodeBridge] No submission URL provided to extractSolution.");
             return null;
         }
 
         try {
-            console.log(`[CodeBridge] Fetching submission page: ${submissionUrl}`);
+            console.log(`[CodeBridge] Fetching submission page (Credentials: include): ${submissionUrl}`);
+
+            // In content script world, fetch will use the tab's cookies automatically.
             const response = await fetch(submissionUrl);
             if (!response.ok) {
-                console.error(`Failed to fetch submission page. Status: ${response.status}`);
-                return null;
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+
             const html = await response.text();
-            const doc = new DOMParser().parseFromString(html, 'text/html');
+            console.log("[CodeBridge] Page fetched. Length:", html.length);
 
-            // The source code is inside a <pre> element with a specific ID.
-            const codeEl = doc.querySelector('#program-source-text');
-            if (!codeEl) {
-                console.error("Could not find source code element on submission page.");
-                return null;
+            // Step 1: Integrity Check (The CSRF Gate)
+            // Look for any CSRF indicators: class, data-attribute, or hidden inputs.
+            const hasCsrf = html.includes('csrf-token') || html.includes('data-csrf') || html.includes('name="_token"');
+
+            if (!hasCsrf) {
+                // Heuristic: If page is small, it might be an error or redirect
+                if (html.length < 5000) {
+                    throw new Error("Session Error: Page content too small. You might be seeing a login wall or a Cloudflare challenge.");
+                }
+                // Log warning but proceed if it looks like a full page? No, user asked for pessimistic.
+                throw new Error("Session Error: Valid Codeforces page not found (missing CSRF indicators). Ensure you are logged in.");
             }
-            const code = codeEl.innerText || "";
+            console.log("[CodeBridge] CSRF indicators found in page.");
 
-            // Find the language from the table of submission details.
+            // Step 2: Locate the Source Code container check
+            if (!html.includes('id="program-source-text"')) {
+                throw new Error("Structure Error: Submission code container (#program-source-text) not found. The submission might be private or the layout changed.");
+            }
+
+            // Step 3: Extract and Decode
+            // Since we are in the content script, we can use DOMParser safely.
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const codeEl = doc.querySelector('#program-source-text');
+
+            if (!codeEl) {
+                throw new Error("Final Check Error: Code container disappeared during parsing.");
+            }
+
+            // innerText automatically decodes HTML entities.
+            // However, CF sometimes puts escaped code in there.
+            let code = codeEl.innerText || "";
+
+            // Double check for common entities just in case innerText wasn't enough (Codeforces quirks)
+            if (code.includes("&lt;") || code.includes("&amp;")) {
+                code = code
+                    .replace(/&lt;/g, "<")
+                    .replace(/&gt;/g, ">")
+                    .replace(/&amp;/g, "&")
+                    .replace(/&quot;/g, '"')
+                    .replace(/&#39;/g, "'")
+                    .replace(/&apos;/g, "'");
+            }
+
+            console.log("[CodeBridge] Code block extracted successfully.");
+
+            // Step 4: Extract Metadata (Language)
             let language = "";
             const infoRows = doc.querySelectorAll('.datatable table tr');
             for (const row of infoRows) {
                 const cells = row.getElementsByTagName('td');
-                if (cells.length > 1 && cells[0].innerText.trim().toLowerCase() === 'lang') {
-                    language = cells[1].innerText.trim();
-                    break;
+                if (cells.length > 1) {
+                    const label = cells[0].innerText.trim().toLowerCase();
+                    if (label === 'lang' || label === 'language' || label.includes('язык')) {
+                        language = cells[1].innerText.trim();
+                        break;
+                    }
                 }
             }
 
-
             console.log(`[CodeBridge] Successfully extracted code and language: ${language}`);
-            return { code, language };
+            return { success: true, code, language };
 
         } catch (error) {
-            console.error("Error during submission fetch and parse:", error);
-            return null;
+            console.error("[CodeBridge] Submission fetch/parse error:", error.message);
+            return { success: false, message: error.message };
         }
     },
 
