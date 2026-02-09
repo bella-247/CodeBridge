@@ -6,6 +6,8 @@ const $ = id => document.getElementById(id);
 let lastProblemData = null;
 let signInPending = false;
 const SIGNIN_TIMEOUT_MS = 20000;
+let detectInFlight = false;
+let autoDetectedOnce = false;
 
 function updateStatus(msg, isError = false) {
   const el = $('status');
@@ -22,6 +24,16 @@ function updateAuthStatus(msg) {
   console.log('[popup] authStatus:', msg);
 }
 
+function setButtonState(button, busy, busyLabel) {
+  if (!button) return;
+  const labelEl = button.querySelector('span') || button;
+  if (!button.dataset.defaultText) {
+    button.dataset.defaultText = labelEl.textContent || '';
+  }
+  button.disabled = !!busy;
+  button.classList.toggle('is-busy', !!busy);
+  labelEl.textContent = busy ? (busyLabel || 'Working...') : button.dataset.defaultText;
+}
 
 function setSignInEnabled(enabled) {
   const btn = $('signInBtn');
@@ -158,7 +170,8 @@ function bindUI() {
   });
 
   const detectBtn = $('detectBtn'); if (detectBtn) detectBtn.addEventListener('click', onDetect);
-  const saveBtn = $('saveBtn'); if (saveBtn) saveBtn.addEventListener('click', onSave);
+  const saveBtn = $('saveBtn'); if (saveBtn) saveBtn.addEventListener('click', () => onSave({ copyAfter: false }));
+  const copyUrlBtn = $('copyUrlBtn'); if (copyUrlBtn) copyUrlBtn.addEventListener('click', () => onSave({ copyAfter: true }));
 
   const help = $('helpLink'); if (help) help.addEventListener('click', (e) => {
     e.preventDefault();
@@ -171,57 +184,92 @@ function queryActiveTab() {
   return new Promise((resolve) => chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs)));
 }
 
+/**
+ * Intelligent Problem Detection
+ * Leverages the content script (injected via manifest) to gather problem details.
+ */
 async function onDetect() {
+  if (detectInFlight) return;
+  detectInFlight = true;
   updateStatus('Detecting problem...');
+  const detectBtn = $('detectBtn');
+  setButtonState(detectBtn, true, 'Detecting...');
   try {
     const tabs = await queryActiveTab();
     if (!tabs || tabs.length === 0) throw new Error('No active tab found');
-    const tabId = tabs[0].id;
+    const tab = tabs[0];
+    const tabId = tab.id;
 
-    // Smart Detection: Try to ping the script first. If no response, inject it.
-    const isScriptReady = await new Promise((resolve) => {
-      chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
-        if (chrome.runtime.lastError || !response || !response.success) {
-          resolve(false);
+    const isSupportedUrl = (url) => {
+      if (!url) return false;
+      return /leetcode\.com|codeforces\.com|hackerrank\.com/i.test(url);
+    };
+
+    const sendProblemRequest = () => new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { action: 'getProblemData' }, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({ error: chrome.runtime.lastError });
         } else {
-          resolve(true);
+          resolve({ response });
         }
       });
     });
 
-    if (!isScriptReady) {
-      console.log('[popup] Content script not found. Injecting...');
+    const injectContentScript = () => new Promise((resolve) => {
       try {
-        await new Promise((resolve, reject) => {
-          chrome.scripting.executeScript({
-            target: { tabId },
-            files: ['src/content.js']
-          }, () => {
-            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-            else resolve();
-          });
+        chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['src/content.js']
+        }, () => {
+          if (chrome.runtime.lastError) resolve(false);
+          else resolve(true);
         });
-        // Give it a moment to initialize listeners
-        await new Promise(r => setTimeout(r, 300));
       } catch (e) {
-        console.warn('Manual injection failed (might already be there or restricted page):', e.message);
+        resolve(false);
+      }
+    });
+
+    if (!isSupportedUrl(tab.url)) {
+      updateStatus('Open a LeetCode, Codeforces, or HackerRank problem page to detect.', true);
+      showMeta(null);
+      return;
+    }
+
+    let result = await sendProblemRequest();
+
+    // If message fails, attempt a one-time injection + retry (helps after extension reloads)
+    if (result.error) {
+      console.warn('[popup] detected message error:', result.error.message);
+      if (isSupportedUrl(tab.url)) {
+        const injected = await injectContentScript();
+        if (injected) await new Promise(r => setTimeout(r, 300));
+        result = await sendProblemRequest();
       }
     }
 
-    // Now request the data
-    chrome.tabs.sendMessage(tabId, { action: 'getProblemData' }, (response) => {
-      if (chrome.runtime.lastError || !response || !response.success || !response.data || !response.data.title) {
-        const errorMsg = (response && response.message) ||
-          (response && response.data && !response.data.title ? 'Problem title not found. Try refreshing the page.' : 'Unable to detect problem on this tab.');
-        updateStatus(errorMsg, true);
-        showMeta(null);
-        return;
-      }
-      showMeta(response.data);
-      updateStatus('Problem detected. Click Save to upload.');
-    });
+    if (result.error) {
+      const errorMsg = 'Script not ready. Try re-opening the popup or refreshing this page.';
+      updateStatus(errorMsg, true);
+      showMeta(null);
+      return;
+    }
+
+    const response = result.response;
+    if (!response || !response.success || !response.data || !response.data.title) {
+      const errorMsg = (response && response.message) || 'Unable to detect problem. Check if you are on a problem page.';
+      updateStatus(errorMsg, true);
+      showMeta(null);
+      return;
+    }
+
+    showMeta(response.data);
+    updateStatus('Problem detected.');
+    autoDetectedOnce = true;
   } catch (err) {
     updateStatus(err.message || 'Detect failed', true);
+  } finally {
+    setButtonState(detectBtn, false);
+    detectInFlight = false;
   }
 }
 
@@ -288,9 +336,18 @@ function showMeta(data) {
   // Path
   $('detectedPath').textContent = `/${data.folderName}/`;
 
+  // Update language selection if user hasn't explicitly set it
+  const langSel = document.getElementById('language');
+  if (langSel && !langSel.dataset.userSet) {
+    const ext = data.extension || 'txt';
+    const hasOption = Array.from(langSel.options || []).some(opt => opt.value === ext);
+    if (hasOption) langSel.value = ext;
+  }
+
   // Check if solution code exists
   if (!data.code || data.code.trim().length === 0) {
-    updateStatus('Warning: No solution code detected! Extraction failed.', true);
+    const extra = data.codeError ? ` Cause: ${data.codeError}` : '';
+    updateStatus(`Warning: No solution code detected!${extra}`, true);
   }
 
   // Check GitHub for existing submission
@@ -339,12 +396,42 @@ function showMeta(data) {
 
 
 
-function onSave() {
+function setSaveButtonsBusy(busy) {
+  const saveBtn = $('saveBtn');
+  const copyUrlBtn = $('copyUrlBtn');
+  setButtonState(saveBtn, busy, 'Saving...');
+  setButtonState(copyUrlBtn, busy, 'Saving...');
+}
+
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'absolute';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (err) {
+      return false;
+    }
+  }
+}
+
+function onSave({ copyAfter = false } = {}) {
   updateStatus('Preparing upload...');
   if (!lastProblemData) { updateStatus('No detected problem. Click Detect first.', true); return; }
 
   if (!lastProblemData.code || lastProblemData.code.trim().length === 0) {
-    updateStatus('Error: Solution code not found. Cannot upload.', true);
+    const extra = lastProblemData.codeError ? ` Cause: ${lastProblemData.codeError}` : '';
+    updateStatus(`Error: Solution code not found. Cannot upload.${extra}`, true);
     return;
   }
   const owner = $('owner').value.trim();
@@ -361,10 +448,22 @@ function onSave() {
   // Use user-selected extension if available, otherwise detected
   const langSel = document.getElementById('language');
   const chosenExt = (langSel && langSel.value) ? langSel.value : (lastProblemData.extension || 'txt');
+  const solveTimeEl = document.getElementById('solveTime');
+  const solveTimeRaw = solveTimeEl ? (solveTimeEl.value || '').trim() : '';
+  if (!solveTimeRaw) {
+    updateStatus('Please enter time to solve (e.g., 45 min).', true);
+    if (solveTimeEl) solveTimeEl.focus();
+    return;
+  }
+  const solveTime = (() => {
+    if (/^\d+$/.test(solveTimeRaw)) return `${solveTimeRaw} min`;
+    return solveTimeRaw;
+  })();
 
   const problemData = {
     ...lastProblemData,
-    extension: chosenExt
+    extension: chosenExt,
+    solveTime
   };
 
   const payload = {
@@ -377,18 +476,33 @@ function onSave() {
     allowUpdate
   };
 
-  chrome.runtime.sendMessage(payload, (resp) => {
-    if (chrome.runtime.lastError) { updateStatus('Background request failed: ' + chrome.runtime.lastError.message, true); return; }
-    if (!resp) { updateStatus('No response from background', true); return; }
-    if (resp.success) {
-      updateStatus('Upload succeeded');
-      // Refresh meta view to show the new "Submitted" status immediately
-      if (lastProblemData) showMeta(lastProblemData);
-      // settings are auto-saved by persistPopupSettings
-    } else {
-      updateStatus('Upload failed: ' + (resp.message || 'unknown'), true);
-    }
-  });
+  setSaveButtonsBusy(true);
+  try {
+    chrome.runtime.sendMessage(payload, (resp) => {
+      setSaveButtonsBusy(false);
+      if (chrome.runtime.lastError) { updateStatus('Background request failed: ' + chrome.runtime.lastError.message, true); return; }
+      if (!resp) { updateStatus('No response from background', true); return; }
+      if (resp.success) {
+        const uploadedUrl = resp && resp.results && resp.results[0] && resp.results[0].url ? resp.results[0].url : null;
+        if (copyAfter) {
+          const urlToCopy = uploadedUrl || `https://github.com/${owner}/${repo}`;
+          copyTextToClipboard(urlToCopy).then((ok) => {
+            updateStatus(ok ? 'Upload succeeded. URL copied.' : 'Upload succeeded, but failed to copy URL.', !ok);
+          });
+        } else {
+          updateStatus('Upload succeeded');
+        }
+        // Refresh meta view to show the new "Submitted" status immediately
+        if (lastProblemData) showMeta(lastProblemData);
+        // settings are auto-saved by persistPopupSettings
+      } else {
+        updateStatus('Upload failed: ' + (resp.message || 'unknown'), true);
+      }
+    });
+  } catch (err) {
+    setSaveButtonsBusy(false);
+    updateStatus('Upload failed: ' + (err && err.message ? err.message : 'unknown error'), true);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -457,7 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const ownerEl = $('owner'); if (ownerEl) ownerEl.addEventListener('input', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
       const repoEl = $('repo'); if (repoEl) repoEl.addEventListener('input', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
       const branchEl = $('branch'); if (branchEl) branchEl.addEventListener('input', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
-      const langEl = document.getElementById('language'); if (langEl) langEl.addEventListener('change', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
+      const langEl = document.getElementById('language'); if (langEl) langEl.addEventListener('change', () => { langEl.dataset.userSet = '1'; persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
       const fileOrgEl = document.getElementById('fileOrg'); if (fileOrgEl) fileOrgEl.addEventListener('change', () => { persistPopupSettings(); if (lastProblemData) showMeta(lastProblemData); });
       const allowEl = document.getElementById('allowUpdate'); if (allowEl) allowEl.addEventListener('change', persistPopupSettings);
       const showEl = document.getElementById('showBubble'); if (showEl) showEl.addEventListener('change', persistPopupSettings);
@@ -479,7 +593,9 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.remove('hidden');
       document.getElementById('signOutBtn') && document.getElementById('signOutBtn').classList.remove('hidden');
       // auto-detect again once authenticated to ensure metadata is available
-      try { onDetect(); } catch (e) { console.warn('auto-detect after auth failed', e && e.message); }
+      if (!lastProblemData && !autoDetectedOnce) {
+        try { onDetect(); } catch (e) { console.warn('auto-detect after auth failed', e && e.message); }
+      }
     });
   });
 
@@ -494,7 +610,9 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('workflowPanel') && document.getElementById('workflowPanel').classList.remove('hidden');
       document.getElementById('signOutBtn') && document.getElementById('signOutBtn').classList.remove('hidden');
       // automatically detect problem after sign-in to prefill fields
-      try { onDetect(); } catch (e) { console.warn('auto-detect after sign-in failed', e && e.message); }
+      if (!lastProblemData && !autoDetectedOnce) {
+        try { onDetect(); } catch (e) { console.warn('auto-detect after sign-in failed', e && e.message); }
+      }
     } else if (message.action === 'deviceFlowError') {
       updateAuthStatus('Authorization error');
       updateStatus(message.message || 'Authorization error', true);

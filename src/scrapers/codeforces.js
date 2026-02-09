@@ -122,9 +122,18 @@ export const CodeforcesScraper = {
             console.log(`[CodeBridge] Fetching submission page (Credentials: include): ${submissionUrl}`);
 
             // In content script world, fetch will use the tab's cookies automatically.
-            const response = await fetch(submissionUrl);
+            const response = await fetch(submissionUrl, {
+                credentials: "include",
+                cache: "no-store"
+            });
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const finalUrl = response.url || submissionUrl;
+                throw new Error(`Fetch Error: HTTP ${response.status} (${finalUrl})`);
+            }
+
+            const finalUrl = response.url || submissionUrl;
+            if (/\/(enter|login|register)(\/|$)/i.test(finalUrl)) {
+                throw new Error(`Session Error: Redirected to login (${finalUrl}). Please sign in and retry.`);
             }
 
             const html = await response.text();
@@ -132,7 +141,7 @@ export const CodeforcesScraper = {
 
             // Step 1: Integrity Check (The CSRF Gate)
             // Look for any CSRF indicators: class, data-attribute, or hidden inputs.
-            const hasCsrf = html.includes('csrf-token') || html.includes('data-csrf') || html.includes('name="_token"');
+            const hasCsrf = html.includes('csrf-token') || html.includes('data-csrf') || html.includes('csrf') || html.includes('name="_token"');
 
             if (!hasCsrf) {
                 // Heuristic: If page is small, it might be an error or redirect
@@ -140,27 +149,33 @@ export const CodeforcesScraper = {
                     throw new Error("Session Error: Page content too small. You might be seeing a login wall or a Cloudflare challenge.");
                 }
                 // Log warning but proceed if it looks like a full page? No, user asked for pessimistic.
-                throw new Error("Session Error: Valid Codeforces page not found (missing CSRF indicators). Ensure you are logged in.");
+                console.warn("[CodeBridge] CSRF indicators missing. Continuing with structural checks.");
+            } else {
+                console.log("[CodeBridge] CSRF indicators found in page.");
             }
-            console.log("[CodeBridge] CSRF indicators found in page.");
 
             // Step 2: Locate the Source Code container check
-            if (!html.includes('id="program-source-text"')) {
-                throw new Error("Structure Error: Submission code container (#program-source-text) not found. The submission might be private or the layout changed.");
-            }
-
             // Step 3: Extract and Decode
             // Since we are in the content script, we can use DOMParser safely.
             const doc = new DOMParser().parseFromString(html, 'text/html');
-            const codeEl = doc.querySelector('#program-source-text');
 
+            const codeEl = doc.querySelector('#program-source-text') || doc.querySelector('pre.prettyprint');
             if (!codeEl) {
-                throw new Error("Final Check Error: Code container disappeared during parsing.");
+                const title = doc.title || "";
+                const isLoginPage = !!(
+                    doc.querySelector('form[action*="/enter"]') ||
+                    doc.querySelector('input[name="handleOrEmail"]') ||
+                    /just a moment|cloudflare/i.test(title)
+                );
+                if (isLoginPage) {
+                    throw new Error(`Session Error: Login/challenge page detected (${title}). Please sign in and retry.`);
+                }
+                throw new Error("Structure Error: Submission code container not found. The submission might be private or the layout changed.");
             }
 
             // innerText automatically decodes HTML entities.
             // However, CF sometimes puts escaped code in there.
-            let code = codeEl.innerText || "";
+            let code = (codeEl.textContent || "").replace(/\u00a0/g, " ");
 
             // Double check for common entities just in case innerText wasn't enough (Codeforces quirks)
             if (code.includes("&lt;") || code.includes("&amp;")) {
@@ -173,6 +188,10 @@ export const CodeforcesScraper = {
                     .replace(/&apos;/g, "'");
             }
 
+            if (!code.trim()) {
+                throw new Error("Structure Error: Extracted code was empty.");
+            }
+
             console.log("[CodeBridge] Code block extracted successfully.");
 
             // Step 4: Extract Metadata (Language)
@@ -181,8 +200,8 @@ export const CodeforcesScraper = {
             for (const row of infoRows) {
                 const cells = row.getElementsByTagName('td');
                 if (cells.length > 1) {
-                    const label = cells[0].innerText.trim().toLowerCase();
-                    if (label === 'lang' || label === 'language' || label.includes('язык')) {
+                    const label = cells[0].innerText.trim().toLowerCase().replace(/:$/, "");
+                    if (label === 'lang' || label === 'language' || label.includes('language') || label.includes('язык')) {
                         language = cells[1].innerText.trim();
                         break;
                     }
