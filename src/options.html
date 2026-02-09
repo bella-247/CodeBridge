@@ -110,6 +110,15 @@
             <label>Default Branch</label>
             <input id="branch" type="text" value="main" />
           </div>
+          <div class="input-group">
+            <label>Problem Statement</label>
+            <div class="checkbox-inline">
+              <input id="includeProblemStatement" type="checkbox" checked />
+              <label for="includeProblemStatement" style="text-transform:none; font-size:12px; margin:0">
+                Always include
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -119,7 +128,8 @@
         <label>Commit Message Template</label>
         <textarea id="templateCommit" placeholder="feat: solved [id] - [title] ([difficulty])"></textarea>
         <div class="vars-guide">
-          Available: <code>[id]</code>, <code>[title]</code>, <code>[difficulty]</code>, <code>[language]</code>
+          Available: <code>[id]</code>, <code>[title]</code>, <code>[difficulty]</code>, <code>[language]</code>,
+          <code>[time]</code>
         </div>
       </div>
 
@@ -127,7 +137,8 @@
         <label>File Path Template</label>
         <textarea id="templatePath" placeholder="[id]-[slug]/solution.[ext]"></textarea>
         <div class="vars-guide">
-          Available: <code>[id]</code>, <code>[slug]</code>, <code>[difficulty]</code>, <code>[ext]</code>
+          Available: <code>[id]</code>, <code>[slug]</code>, <code>[difficulty]</code>, <code>[ext]</code>,
+          <code>[platform]</code>
         </div>
       </div>
 
@@ -135,17 +146,17 @@
         <label>Solution File Header (Comment)</label>
         <textarea id="templateSolution" placeholder="[title]\n[url]\n[difficulty]"></textarea>
         <div class="vars-guide">
-          Available: <code>[title]</code>, <code>[id]</code>, <code>[difficulty]</code>, <code>[url]</code>. This will
-          be automatically wrapped in comments based on the language.
+          Available: <code>[title]</code>, <code>[id]</code>, <code>[difficulty]</code>, <code>[url]</code>,
+          <code>[time]</code>, <code>[platform]</code>. This will be automatically wrapped in comments based on the language.
         </div>
       </div>
 
       <div class="glass-card template-field">
         <label>README Template (Markdown)</label>
-        <textarea id="templateReadme" placeholder="# [title]\n\n**Difficulty:** [difficulty]\n\n[url]"></textarea>
+        <textarea id="templateReadme" placeholder="# [title]\n\n**Difficulty:** [difficulty]\n\n**Time:** [time]\n\n[url]"></textarea>
         <div class="vars-guide">
           Available: <code>[title]</code>, <code>[id]</code>, <code>[difficulty]</code>, <code>[url]</code>,
-          <code>[description]</code>
+          <code>[description]</code>, <code>[time]</code>, <code>[tags]</code>, <code>[platform]</code>
         </div>
       </div>
 

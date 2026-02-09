@@ -78,7 +78,13 @@ async function handlePrepareAndUpload(message) {
     try {
         // Fetch templates from storage
         const items = await new Promise(resolve => {
-            chrome.storage.local.get(['template_commit', 'template_path', 'template_readme', 'template_solution'], resolve);
+            chrome.storage.local.get([
+                'template_commit',
+                'template_path',
+                'template_readme',
+                'template_solution',
+                'includeProblemStatement'
+            ], resolve);
         });
 
         const ext = problemData.extension || "txt";
@@ -87,8 +93,11 @@ async function handlePrepareAndUpload(message) {
             readme: items.template_readme,
             solutionHeader: items.template_solution
         };
+        const includeProblemStatement = typeof items.includeProblemStatement === "undefined"
+            ? true
+            : !!items.includeProblemStatement;
 
-        const files = generateUploadFiles(fileOrg, problemData, ext, templates);
+        const files = generateUploadFiles(fileOrg, problemData, ext, templates, { includeProblemStatement });
 
         // Commit message
         const commitMessage = TemplateManager.populateAll(problemData, templates, ext).commit;

@@ -52,6 +52,9 @@
     let _autoSaveDebounce = null;
     let _lastAutoSaved = null;
     let _submissionObserver = null;
+    let _showBubble = true;
+    let _adapterPromise = null;
+    const ACCEPTED_RE = /\bAccepted\b/i;
 
     // --- Helper Functions ---
     function normalizeLanguage(lang) {
@@ -65,9 +68,10 @@
     }
 
     function formatFolderName(id, title, prefix = "") {
+        const safeTitle = title || "unknown";
         const isNumericId = id && !isNaN(id);
         const pad = (isNumericId ? String(id).padStart(4, "0") : id || "0000").trim();
-        const kebab = title
+        const kebab = safeTitle
             .toLowerCase()
             .replace(/[`~!@#$%^&*()+=\[\]{};:'"\\|<>\/?]/g, "")
             .replace(/\s+/g, "-")
@@ -86,6 +90,8 @@
     }
 
     async function loadAdapter() {
+        if (_adapterPromise) return _adapterPromise;
+
         const hostname = location.hostname;
         let moduleUrl = null;
         let adapterName = null;
@@ -101,15 +107,19 @@
             adapterName = "HackerRankAdapter";
         }
 
-        if (!moduleUrl) return null;
+        _adapterPromise = (async () => {
+            if (!moduleUrl) return null;
+            try {
+                const mod = await import(chrome.runtime.getURL(moduleUrl));
+                return mod[adapterName] || null;
+            } catch (e) {
+                console.error("[CodeBridge] Failed to load adapter", e);
+                _adapterPromise = null;
+                return null;
+            }
+        })();
 
-        try {
-            const mod = await import(chrome.runtime.getURL(moduleUrl));
-            return mod[adapterName];
-        } catch (e) {
-            console.error("[CodeBridge] Failed to load adapter", e);
-            return null;
-        }
+        return _adapterPromise;
     }
 
     async function getEditorCode() {
@@ -280,7 +290,7 @@
                     minimalToast("Syncing solution...", true);
                     const data = await gatherProblemData();
                     if (!data || !data.code) throw new Error("No code found.");
-                    await performAutoSave(data);
+                    await performAutoSave(data, { silent: false });
                 } catch (err) {
                     minimalToast(err.message || "Sync failed", false);
                 } finally {
@@ -310,10 +320,10 @@
         _submissionObserver = new MutationObserver((mutations) => {
             for (const m of mutations) {
                 const nodes = Array.from(m.addedNodes || []);
-                const foundAccepted = nodes.some(n => /\bAccepted\b/i.test(n.textContent || ""));
-                if (foundAccepted || (m.type === "characterData" && /\bAccepted\b/i.test(m.target.data || ""))) {
+                const foundAccepted = nodes.some(n => ACCEPTED_RE.test(n.textContent || ""));
+                if (foundAccepted || (m.type === "characterData" && ACCEPTED_RE.test(m.target.data || ""))) {
                     debounceAutoSync();
-                    ensureBubble(); // Show bubble when success detected
+                    if (_showBubble) setBubbleVisible(true);
                 }
             }
         });
@@ -328,6 +338,14 @@
         _submissionObserver = null;
     }
 
+    function updateSubmissionObserver() {
+        if (_autoSaveEnabled || _showBubble) {
+            startSubmissionObserver();
+        } else {
+            stopSubmissionObserver();
+        }
+    }
+
     function debounceAutoSync() {
         if (!_autoSaveEnabled) return;
         if (_autoSaveDebounce) return;
@@ -337,16 +355,19 @@
                 const data = await gatherProblemData();
                 if (!data || !data.slug || _lastAutoSaved === data.slug) return;
                 _lastAutoSaved = data.slug;
-                performAutoSave(data);
+                performAutoSave(data, { silent: true });
             } catch (e) { }
         }, 2000);
     }
 
-    async function performAutoSave(problemData) {
+    async function performAutoSave(problemData, { silent = false } = {}) {
         chrome.storage.local.get(["github_owner", "github_repo", "github_branch", "github_token", "github_file_structure", "allowUpdateDefault"], (items) => {
             const { github_owner: owner, github_repo: repo, github_token: token } = items;
             const branch = items.github_branch || "main";
-            if (!owner || !repo || !token) return;
+            if (!owner || !repo || !token) {
+                if (!silent) minimalToast("Missing GitHub config. Open popup to set owner/repo.", false);
+                return;
+            }
 
             chrome.runtime.sendMessage({
                 action: "prepareAndUpload",
@@ -355,7 +376,15 @@
                 fileOrg: items.github_file_structure || "folder",
                 allowUpdate: !!items.allowUpdateDefault
             }, (resp) => {
-                if (resp && resp.success) minimalToast("Auto-synced to GitHub!", true);
+                if (chrome.runtime.lastError) {
+                    if (!silent) minimalToast("Upload failed: " + chrome.runtime.lastError.message, false);
+                    return;
+                }
+                if (!silent && resp && resp.success) {
+                    minimalToast("Uploaded to GitHub", true);
+                } else if (!silent && resp && !resp.success) {
+                    minimalToast(resp.message || "Upload failed", false);
+                }
             });
         });
     }
@@ -363,10 +392,9 @@
     // Initialize
     chrome.storage.local.get(["autoSave", "showBubble"], (items) => {
         _autoSaveEnabled = !!(items && items.autoSave);
-        if (_autoSaveEnabled) startSubmissionObserver();
-
-        const showBubble = items && typeof items.showBubble !== "undefined" ? !!items.showBubble : true;
-        setBubbleVisible(showBubble);
+        _showBubble = items && typeof items.showBubble !== "undefined" ? !!items.showBubble : true;
+        setBubbleVisible(_showBubble);
+        updateSubmissionObserver();
     });
 
     chrome.storage.onChanged.addListener((changes, area) => {
@@ -374,12 +402,13 @@
 
         if (changes.autoSave) {
             _autoSaveEnabled = !!changes.autoSave.newValue;
-            if (_autoSaveEnabled) startSubmissionObserver();
-            else stopSubmissionObserver();
+            updateSubmissionObserver();
         }
 
         if (changes.showBubble) {
-            setBubbleVisible(!!changes.showBubble.newValue);
+            _showBubble = !!changes.showBubble.newValue;
+            setBubbleVisible(_showBubble);
+            updateSubmissionObserver();
         }
     });
 

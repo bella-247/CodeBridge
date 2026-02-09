@@ -124,6 +124,19 @@
                             </select>
                         </div>
                     </div>
+
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label for="solveTime">Time to Solve</label>
+                            <input id="solveTime" type="text" placeholder="e.g. 45 min" />
+                        </div>
+                        <div class="input-group">
+                            <label for="solveTimeHint">Tip</label>
+                            <div id="solveTimeHint" class="muted" style="font-size:11px; line-height:1.4;">
+                                Add the time you spent to track progress.
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="problem-container glass-card" id="metaBox">
@@ -152,9 +165,14 @@
                     <button id="detectBtn" class="btn secondary">
                         <span>Re-detect Problem</span>
                     </button>
-                    <button id="saveBtn" class="btn primary full-width">
-                        <span>Save to GitHub</span>
-                    </button>
+                    <div class="action-row">
+                        <button id="saveBtn" class="btn primary">
+                            <span>Save to GitHub</span>
+                        </button>
+                        <button id="copyUrlBtn" class="btn secondary">
+                            <span>Copy URL</span>
+                        </button>
+                    </div>
                     <div class="status-msg" id="status"></div>
                 </div>
             </section>

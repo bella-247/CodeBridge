@@ -164,6 +164,14 @@ h3 {
     letter-spacing: 0.2px;
 }
 
+.btn:disabled,
+.btn.is-busy {
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
+    box-shadow: none;
+}
+
 .btn.primary {
     background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
     box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
@@ -444,6 +452,15 @@ input[type="checkbox"] {
     font-size: 12px;
     margin-top: 10px;
     min-height: 18px;
+}
+
+.action-row {
+    display: flex;
+    gap: 10px;
+}
+
+.action-row .btn {
+    flex: 1;
 }
 
 footer {

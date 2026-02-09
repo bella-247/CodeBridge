@@ -12,7 +12,8 @@ function loadOptions() {
         "template_commit",
         "template_path",
         "template_readme",
-        "template_solution"
+        "template_solution",
+        "includeProblemStatement"
     ], (items) => {
         if (items) {
             if (items.github_owner) $("owner").value = items.github_owner;
@@ -23,6 +24,12 @@ function loadOptions() {
             if (items.template_path) $("templatePath").value = items.template_path;
             if (items.template_readme) $("templateReadme").value = items.template_readme;
             if (items.template_solution) $("templateSolution").value = items.template_solution;
+
+            if (typeof items.includeProblemStatement !== "undefined" && $("includeProblemStatement")) {
+                $("includeProblemStatement").checked = !!items.includeProblemStatement;
+            } else if ($("includeProblemStatement")) {
+                $("includeProblemStatement").checked = true;
+            }
         }
     });
 }
@@ -36,6 +43,7 @@ function saveOptions() {
     const templatePath = $("templatePath").value.trim();
     const templateReadme = $("templateReadme").value.trim();
     const templateSolution = $("templateSolution").value.trim();
+    const includeProblemStatement = $("includeProblemStatement") ? $("includeProblemStatement").checked : true;
 
     const toSave = {
         github_owner: owner,
@@ -44,7 +52,8 @@ function saveOptions() {
         template_commit: templateCommit,
         template_path: templatePath,
         template_readme: templateReadme,
-        template_solution: templateSolution
+        template_solution: templateSolution,
+        includeProblemStatement
     };
 
     chrome.storage.local.set(toSave, () => {
@@ -59,8 +68,9 @@ function resetTemplates() {
     if (confirm("Restore all templates to default?")) {
         $("templateCommit").value = "Solved [id] - [title] ([difficulty])";
         $("templatePath").value = "[id]-[slug]/solution.[ext]";
-        $("templateReadme").value = "# [title]\n\n**Difficulty:** [difficulty]\n\n**URL:** [url]\n\n## Problem\n\n[description]";
+        $("templateReadme").value = "# [title]\n\n**Difficulty:** [difficulty]\n\n**Time:** [time]\n\n**URL:** [url]\n\n## Problem\n\n[description]";
         $("templateSolution").value = "[title]\n\n[url]\n\nDifficulty: [difficulty]";
+        if ($("includeProblemStatement")) $("includeProblemStatement").checked = true;
         saveOptions();
     }
 }
