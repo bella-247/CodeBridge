@@ -14,42 +14,115 @@ export const CodeforcesAdapter = {
      * Finds the currently logged-in user handle on Codeforces.
      */
     getHandle() {
-        // Look for the user profile link, specifically in the header to ensure it's the logged-in user
-        const profileLink = document.querySelector('#header a[href^="/profile/"]') || 
-                           document.querySelector('a[href^="/profile/"]');
+        const extractHandle = (link) => {
+            try {
+                const href = link.getAttribute('href') || "";
+                const url = new URL(href, location.origin);
+                const parts = url.pathname.split('/').filter(Boolean);
+                const idx = parts.indexOf('profile');
+                const handle = idx !== -1 && parts[idx + 1] ? parts[idx + 1] : parts[parts.length - 1];
+                return handle ? decodeURIComponent(handle).trim() : null;
+            } catch (e) {
+                return null;
+            }
+        };
+
+        // Prefer header area to avoid picking authors from the statement
+        const header = document.querySelector('#header') || document.querySelector('.header') || document.body;
+        let profileLink = header ? header.querySelector('a[href^="/profile/"]') : null;
         if (profileLink) {
-            const handle = profileLink.getAttribute('href').replace('/profile/', '').trim();
-            console.log(`[CodeBridge] Detected Codeforces handle: ${handle}`);
-            return handle;
+            const handle = extractHandle(profileLink);
+            if (handle) {
+                console.log(`[CodeBridge] Detected Codeforces handle: ${handle}`);
+                return handle;
+            }
         }
+
+        // Fallback: use the only profile link if it's unambiguous
+        const profileLinks = Array.from(document.querySelectorAll('a[href^="/profile/"]'));
+        if (profileLinks.length === 1) {
+            const handle = extractHandle(profileLinks[0]);
+            if (handle) {
+                console.log(`[CodeBridge] Detected Codeforces handle (fallback): ${handle}`);
+                return handle;
+            }
+        }
+
         return null;
     },
 
     getSubmissionUrl() {
         console.log("[CodeBridge] Scanning for Codeforces submission URL (Layers of Truth)...");
 
+        // If already on a submission page, use it directly
+        if (location.pathname.includes('/submission/')) {
+            return location.href;
+        }
+        if (document.querySelector('#program-source-text')) {
+            return location.href;
+        }
+
         const handle = this.getHandle();
         if (!handle) {
-            console.warn("[CodeBridge] User not logged in. Cannot verify submission ownership.");
-            // We proceed, but we should ideally notify the user. 
-            // The content script will handle the red error if no code is found.
+            console.warn("[CodeBridge] User handle not detected. Will only trust user-specific sidebar data.");
         }
+
+        const handleLower = handle ? handle.toLowerCase() : "";
+        const canVerifyUser = !!handleLower;
+
+        const lastSubsBox = (() => {
+            const boxes = Array.from(document.querySelectorAll('.sidebox'));
+            const byCaption = boxes.find(b => {
+                const cap = b.querySelector('.caption');
+                return cap && /last submissions/i.test(cap.textContent || '');
+            });
+            if (byCaption) return byCaption;
+            return boxes.find(b => {
+                return b.querySelector('a[href*="/submission/"]') && b.querySelector('.verdict-accepted');
+            }) || null;
+        })();
+
+        const inferredSubsBox = (() => {
+            const sidebarRoot = document.querySelector('#sidebar') || document.body;
+            const links = Array.from(sidebarRoot.querySelectorAll('a[href*="/submission/"]'));
+            for (const link of links) {
+                const row = link.closest('tr');
+                if (row && row.querySelector('.verdict-accepted')) {
+                    return link.closest('.sidebox') || null;
+                }
+            }
+            return null;
+        })();
+
+        const trustedContainers = [lastSubsBox, inferredSubsBox]
+            .filter(Boolean);
 
         // Strategy A: Sidebar Extraction (High Performance, High Trust)
         // Problems often have a "Last submissions" sidebar.
-        const sidebar = document.querySelector('.side-problem-submissions') || document.querySelector('#sidebar');
+        const sideProblemSubs = document.querySelector('.side-problem-submissions');
+        if (sideProblemSubs) trustedContainers.push(sideProblemSubs);
+
+        const sidebar = lastSubsBox || sideProblemSubs || document.querySelector('#sidebar');
+        if (sidebar && sidebar.querySelector('a[href*="/submission/"]') && sidebar.querySelector('.verdict-accepted')) {
+            trustedContainers.push(sidebar);
+        }
         if (sidebar) {
             console.log("[CodeBridge] Checking sidebar for submissions...");
             const sidebarLinks = Array.from(sidebar.querySelectorAll('a[href*="/submission/"]'));
             for (const link of sidebarLinks) {
                 const row = link.closest('tr') || link.parentElement;
                 const text = row.innerText || "";
+                const textLower = text.toLowerCase();
+                const isTrustedContext = trustedContainers.some(c => c && c.contains(link));
 
                 // Integrity checks: 
                 // 1. Is it 'Accepted'?
                 // 2. If we have a handle, does it belong to the user?
                 const isAccepted = /Accepted|OK/i.test(text) || row.querySelector('.verdict-accepted');
-                const isUserSubmission = !handle || text.includes(handle) || row.querySelector(`a[href="/profile/${handle}"]`);
+                const isUserSubmission = isTrustedContext || (canVerifyUser &&
+                    (textLower.includes(handleLower) ||
+                    Array.from(row.querySelectorAll('a[href^="/profile/"]'))
+                        .some(a => (a.getAttribute('href') || '').toLowerCase() === `/profile/${handleLower}`)));
 
                 if (isAccepted && isUserSubmission) {
                     const solUrl = new URL(link.getAttribute('href'), location.origin).href;
@@ -60,6 +133,11 @@ export const CodeforcesAdapter = {
         }
 
         // Strategy B: Full Page Scan (Fallback)
+        if (!canVerifyUser) {
+            console.warn("[CodeBridge] Skipping full-page scan without a verified handle.");
+            return null;
+        }
+
         console.log("[CodeBridge] Sidebar search failed. Scanning entire page...");
         const allLinks = Array.from(document.querySelectorAll('a[href*="/submission/"]'));
 
@@ -68,8 +146,11 @@ export const CodeforcesAdapter = {
             if (!row) continue;
 
             const text = row.innerText || "";
+            const textLower = text.toLowerCase();
             const isAccepted = /Accepted|OK/i.test(text) || row.querySelector('.verdict-accepted');
-            const isUserSubmission = !handle || text.includes(handle) || row.querySelector(`a[href="/profile/${handle}"]`);
+            const isUserSubmission = textLower.includes(handleLower) ||
+                Array.from(row.querySelectorAll('a[href^="/profile/"]'))
+                    .some(a => (a.getAttribute('href') || '').toLowerCase() === `/profile/${handleLower}`);
 
             if (isAccepted && isUserSubmission) {
                 const absoluteUrl = new URL(link.getAttribute('href'), location.origin).href;
@@ -91,20 +172,34 @@ export const CodeforcesAdapter = {
 
         const handle = this.getHandle();
         if (!handle) {
-            // This will be caught by gatherProblemData and displayed to the user
-            throw new Error("Login Error: Please log into Codeforces first so we can identify your solutions.");
+            console.warn("[CodeBridge] Could not detect Codeforces handle. Proceeding without user verification.");
         }
 
-        const metadata = await CodeforcesScraper.fetchMetadata();
+        let metadata = null;
+        try {
+            metadata = await CodeforcesScraper.fetchMetadata();
+        } catch (e) {
+            console.warn("[CodeBridge] Metadata scrape threw. Using fallback.");
+        }
+
         if (!metadata) {
-            console.error("[CodeBridge] Failed to scrape problem metadata.");
-            return null;
+            const fallbackId = CodeforcesScraper.getSlug(location.href);
+            const fallbackTitle = (document.title || fallbackId || "unknown").replace(/\s*-\s*Codeforces\s*$/i, "");
+            metadata = {
+                id: fallbackId || "unknown",
+                slug: fallbackId || "unknown",
+                title: fallbackTitle || "unknown",
+                contentHtml: "",
+                difficulty: "Unknown",
+                tags: [],
+                platform: "Codeforces"
+            };
         }
 
         return {
             ...metadata,
             platform: "Codeforces",
-            userHandle: handle
+            userHandle: handle || null
         };
     },
 

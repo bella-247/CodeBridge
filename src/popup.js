@@ -346,7 +346,8 @@ function showMeta(data) {
 
   // Check if solution code exists
   if (!data.code || data.code.trim().length === 0) {
-    updateStatus('Warning: No solution code detected! Extraction failed.', true);
+    const extra = data.codeError ? ` Cause: ${data.codeError}` : '';
+    updateStatus(`Warning: No solution code detected!${extra}`, true);
   }
 
   // Check GitHub for existing submission
@@ -429,7 +430,8 @@ function onSave({ copyAfter = false } = {}) {
   if (!lastProblemData) { updateStatus('No detected problem. Click Detect first.', true); return; }
 
   if (!lastProblemData.code || lastProblemData.code.trim().length === 0) {
-    updateStatus('Error: Solution code not found. Cannot upload.', true);
+    const extra = lastProblemData.codeError ? ` Cause: ${lastProblemData.codeError}` : '';
+    updateStatus(`Error: Solution code not found. Cannot upload.${extra}`, true);
     return;
   }
   const owner = $('owner').value.trim();

@@ -251,6 +251,15 @@ function decodeHtmlEntities(text) {
         .replace(/&apos;/g, "'"); // for single quotes
 }
 
+function looksLikeCodeforcesLogin(html) {
+    if (!html) return false;
+    if (/handleOrEmail/i.test(html) && /password/i.test(html)) return true;
+    if (/form[^>]+action="\/enter"/i.test(html)) return true;
+    if (/enter\s*\|\s*codeforces/i.test(html)) return true;
+    if (/just a moment|cloudflare/i.test(html)) return true;
+    return false;
+}
+
 async function handleFetchSubmissionCode(message) {
     const { url } = message;
     if (!url) return { success: false, message: "Missing URL" };
@@ -265,14 +274,11 @@ async function handleFetchSubmissionCode(message) {
         const text = await response.text();
         console.log("[CodeBridge] Page fetched. Text length:", text.length);
 
-        // Step 1: Integrity Check (The CSRF Gate)
-        if (!text.includes('class="csrf-token"')) {
-            throw new Error("Session Error: Valid Codeforces page not found (missing CSRF token). User might be logged out or redirected.");
-        }
-        console.log("[CodeBridge] CSRF token found.");
-
-        // Step 2: Locate the Source Code
-        if (!text.includes('id="program-source-text"')) {
+        const hasCodeBlock = text.includes('id="program-source-text"');
+        if (!hasCodeBlock) {
+            if (looksLikeCodeforcesLogin(text)) {
+                throw new Error("Session Error: Codeforces login/challenge page detected. Please sign in and retry.");
+            }
             throw new Error("Structure Error: Submission code container not found. The submission might be hidden or the website layout changed.");
         }
         console.log("[CodeBridge] Code block ID found.");
@@ -285,7 +291,7 @@ async function handleFetchSubmissionCode(message) {
 
         let code = "";
         if (codeMatch && codeMatch[1]) {
-            code = decodeHtmlEntities(codeMatch[1]);
+            code = decodeHtmlEntities(codeMatch[1]).replace(/\u00a0/g, " ");
             console.log("[CodeBridge] Code block extracted and decoded.");
         } else {
             // This case should theoretically be covered by the includes check above,
@@ -294,9 +300,9 @@ async function handleFetchSubmissionCode(message) {
         }
 
         // Step 4: Extract Metadata (Language)
-        const langRegex = /<td>Language:<\/td>\s*<td>(.*?)<\/td>/i;
+        const langRegex = /<td>\s*(?:Programming\s+Language|Language)\s*:?\s*<\/td>\s*<td[^>]*>(.*?)<\/td>/i;
         const langMatch = text.match(langRegex);
-        const language = langMatch ? langMatch[1].trim() : null;
+        const language = langMatch ? decodeHtmlEntities(langMatch[1].trim()) : null;
         console.log("[CodeBridge] Language detected:", language);
 
         console.log("[CodeBridge] Code extraction process completed successfully.");

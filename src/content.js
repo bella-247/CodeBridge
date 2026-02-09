@@ -101,6 +101,20 @@
         return prefix ? `${prefix}-${name}` : name;
     }
 
+    function waitMs(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function waitForSubmissionUrl(adapter, { timeoutMs = 2500, intervalMs = 250 } = {}) {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            const url = adapter.getSubmissionUrl();
+            if (url) return url;
+            await waitMs(intervalMs);
+        }
+        return null;
+    }
+
     async function loadAdapter() {
         if (_adapterPromise) return _adapterPromise;
 
@@ -169,14 +183,22 @@
 
             const editor = await getEditorCode();
             let code = editor.code || "";
+            let codeSource = code && code.trim() ? "editor" : "";
             const isCodeforces = adapter.name === "Codeforces";
+            const isCfSubmissionPage =
+                isCodeforces &&
+                (location.pathname.includes("/submission/") ||
+                    document.querySelector("#program-source-text"));
 
             const shouldFetch =
-                (isCodeforces && adapter.getSubmissionUrl) ||
-                (!code.trim() && adapter.getSubmissionUrl);
+                adapter.getSubmissionUrl &&
+                (!code.trim() || !isCfSubmissionPage);
 
             if (shouldFetch) {
-                const subUrl = adapter.getSubmissionUrl();
+                let subUrl = adapter.getSubmissionUrl();
+                if (!subUrl && isCodeforces) {
+                    subUrl = await waitForSubmissionUrl(adapter);
+                }
                 if (subUrl) {
                     console.log("[CodeBridge] Fetching submission:", subUrl);
                     let res = null;
@@ -195,7 +217,20 @@
                     if (res && res.success && res.code) {
                         code = res.code;
                         if (res.language) data.language = res.language;
+                        codeSource = "submission";
+                    } else if (res && res.success && !res.code) {
+                        data.codeError =
+                            "Submission parsed but code was empty.";
+                    } else if (res && !res.success && res.message) {
+                        data.codeError = res.message;
+                    } else if (!res) {
+                        data.codeError =
+                            "Submission fetch did not return a response.";
                     }
+                    data.submissionUrl = subUrl;
+                } else if (isCodeforces) {
+                    data.codeError =
+                        "No accepted submission link found in the page sidebar (after waiting).";
                 }
             }
 
@@ -224,6 +259,7 @@
                 extension: extWithDot.replace(/^\./, ""),
                 url: location.href,
                 folderName: folderName,
+                codeSource: codeSource || (code && code.trim() ? "editor" : ""),
             };
         } catch (err) {
             console.error("[CodeBridge] gatherProblemData failed", err);
