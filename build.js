@@ -4,9 +4,9 @@ const fs = require("fs");
 
 // Files to process
 const files = [
-  { in: "src/background.js", out: "build/background.js" },
+  { in: "src/background/index.js", out: "build/background.js" },
   { in: "src/content.js", out: "build/content.js" },
-  { in: "src/popup.js", out: "build/popup.js" },
+  { in: "src/pages/popup/popup.js", out: "build/popup.js" },
 ];
 
 async function processFile(input, output) {
