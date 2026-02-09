@@ -171,55 +171,76 @@ function queryActiveTab() {
   return new Promise((resolve) => chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => resolve(tabs)));
 }
 
+/**
+ * Intelligent Problem Detection
+ * Leverages the content script (injected via manifest) to gather problem details.
+ */
 async function onDetect() {
   updateStatus('Detecting problem...');
   try {
     const tabs = await queryActiveTab();
     if (!tabs || tabs.length === 0) throw new Error('No active tab found');
-    const tabId = tabs[0].id;
+    const tab = tabs[0];
+    const tabId = tab.id;
 
-    // Smart Detection: Try to ping the script first. If no response, inject it.
-    const isScriptReady = await new Promise((resolve) => {
-      chrome.tabs.sendMessage(tabId, { action: 'ping' }, (response) => {
-        if (chrome.runtime.lastError || !response || !response.success) {
-          resolve(false);
+    const isSupportedUrl = (url) => {
+      if (!url) return false;
+      return /leetcode\.com|codeforces\.com|hackerrank\.com/i.test(url);
+    };
+
+    const sendProblemRequest = () => new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { action: 'getProblemData' }, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve({ error: chrome.runtime.lastError });
         } else {
-          resolve(true);
+          resolve({ response });
         }
       });
     });
 
-    if (!isScriptReady) {
-      console.log('[popup] Content script not found. Injecting...');
+    const injectContentScript = () => new Promise((resolve) => {
       try {
-        await new Promise((resolve, reject) => {
-          chrome.scripting.executeScript({
-            target: { tabId },
-            files: ['src/content.js']
-          }, () => {
-            if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-            else resolve();
-          });
+        chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['src/content.js']
+        }, () => {
+          if (chrome.runtime.lastError) resolve(false);
+          else resolve(true);
         });
-        // Give it a moment to initialize listeners
-        await new Promise(r => setTimeout(r, 300));
       } catch (e) {
-        console.warn('Manual injection failed (might already be there or restricted page):', e.message);
+        resolve(false);
+      }
+    });
+
+    let result = await sendProblemRequest();
+
+    // If message fails, attempt a one-time injection + retry (helps after extension reloads)
+    if (result.error) {
+      console.warn('[popup] detected message error:', result.error.message);
+      if (isSupportedUrl(tab.url)) {
+        const injected = await injectContentScript();
+        if (injected) await new Promise(r => setTimeout(r, 300));
+        result = await sendProblemRequest();
       }
     }
 
-    // Now request the data
-    chrome.tabs.sendMessage(tabId, { action: 'getProblemData' }, (response) => {
-      if (chrome.runtime.lastError || !response || !response.success || !response.data || !response.data.title) {
-        const errorMsg = (response && response.message) ||
-          (response && response.data && !response.data.title ? 'Problem title not found. Try refreshing the page.' : 'Unable to detect problem on this tab.');
-        updateStatus(errorMsg, true);
-        showMeta(null);
-        return;
-      }
-      showMeta(response.data);
-      updateStatus('Problem detected. Click Save to upload.');
-    });
+    if (result.error) {
+      const errorMsg = 'Script not ready. Try re-opening the popup or refreshing this page.';
+      updateStatus(errorMsg, true);
+      showMeta(null);
+      return;
+    }
+
+    const response = result.response;
+    if (!response || !response.success || !response.data || !response.data.title) {
+      const errorMsg = (response && response.message) || 'Unable to detect problem. Check if you are on a problem page.';
+      updateStatus(errorMsg, true);
+      showMeta(null);
+      return;
+    }
+
+    showMeta(response.data);
+    updateStatus('Problem detected.');
   } catch (err) {
     updateStatus(err.message || 'Detect failed', true);
   }

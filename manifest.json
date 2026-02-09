@@ -13,8 +13,11 @@
     "alarms"
   ],
   "host_permissions": [
+    "https://leetcode.com/*",
     "https://*.leetcode.com/*",
+    "https://codeforces.com/*",
     "https://*.codeforces.com/*",
+    "https://hackerrank.com/*",
     "https://*.hackerrank.com/*",
     "https://github.com/*",
     "https://api.github.com/*"
@@ -31,6 +34,24 @@
     "page": "src/options.html",
     "open_in_tab": true
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://leetcode.com/*",
+        "https://*.leetcode.com/*",
+        "https://codeforces.com/*",
+        "https://*.codeforces.com/*",
+        "https://hackerrank.com/*",
+        "https://*.hackerrank.com/*"
+      ],
+      "js": [
+        "src/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false,
+      "world": "ISOLATED"
+    }
+  ],
   "web_accessible_resources": [
     {
       "resources": [
@@ -39,8 +60,11 @@
         "src/scrapers/*.js"
       ],
       "matches": [
+        "https://leetcode.com/*",
         "https://*.leetcode.com/*",
+        "https://codeforces.com/*",
         "https://*.codeforces.com/*",
+        "https://hackerrank.com/*",
         "https://*.hackerrank.com/*"
       ]
     }
