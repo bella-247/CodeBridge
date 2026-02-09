@@ -1,18 +1,23 @@
 /**
  * CodeBridge Content Script
- * 
- * Extreme Idempotency Guard: 
- * We use a self-executing function and a window property check to ensure 
+ *
+ * Extreme Idempotency Guard:
+ * We use a self-executing function and a window property check to ensure
  * that no logic runs twice and no variables are redeclared.
  */
 (function () {
     if (window.__codebridge_injected) {
-        console.log("[CodeBridge] Content script already active. Skipping redundant initialization.");
+        console.log(
+            "[CodeBridge] Content script already active. Skipping redundant initialization.",
+        );
         return;
     }
     window.__codebridge_injected = true;
 
-    console.log("[CodeBridge] Initializing content script for:", location.hostname);
+    console.log(
+        "[CodeBridge] Initializing content script for:",
+        location.hostname,
+    );
 
     // --- Constants and Maps ---
     const LANGUAGE_EXTENSION_MAP = {
@@ -44,7 +49,7 @@
         dart: ".dart",
         haskell: ".hs",
         lua: ".lua",
-        perl: ".pl"
+        perl: ".pl",
     };
 
     // --- Internal State ---
@@ -70,7 +75,9 @@
     function formatFolderName(id, title, prefix = "") {
         const safeTitle = title || "unknown";
         const isNumericId = id && !isNaN(id);
-        const pad = (isNumericId ? String(id).padStart(4, "0") : id || "0000").trim();
+        const pad = (
+            isNumericId ? String(id).padStart(4, "0") : id || "0000"
+        ).trim();
         const kebab = safeTitle
             .toLowerCase()
             .replace(/[`~!@#$%^&*()+=\[\]{};:'"\\|<>\/?]/g, "")
@@ -81,7 +88,12 @@
 
         let name;
         const lowPad = pad.toLowerCase();
-        if (!isNumericId && (lowPad === kebab || lowPad.includes(kebab) || kebab.includes(lowPad))) {
+        if (
+            !isNumericId &&
+            (lowPad === kebab ||
+                lowPad.includes(kebab) ||
+                kebab.includes(lowPad))
+        ) {
             name = lowPad.length >= kebab.length ? lowPad : kebab;
         } else {
             name = `${pad}-${kebab}`;
@@ -125,14 +137,23 @@
     async function getEditorCode() {
         return new Promise((resolve) => {
             try {
-                chrome.runtime.sendMessage({ action: "executeCodeExtraction" }, (response) => {
-                    if (chrome.runtime.lastError || !response || !response.success) {
-                        resolve({ code: "", languageId: null });
-                    } else {
-                        resolve(response.data);
-                    }
-                });
-            } catch (e) { resolve({ code: "", languageId: null }); }
+                chrome.runtime.sendMessage(
+                    { action: "executeCodeExtraction" },
+                    (response) => {
+                        if (
+                            chrome.runtime.lastError ||
+                            !response ||
+                            !response.success
+                        ) {
+                            resolve({ code: "", languageId: null });
+                        } else {
+                            resolve(response.data);
+                        }
+                    },
+                );
+            } catch (e) {
+                resolve({ code: "", languageId: null });
+            }
         });
     }
 
@@ -143,13 +164,16 @@
 
         try {
             const data = await adapter.gather();
-            if (!data) throw new Error("Adapter failed to gather problem details.");
+            if (!data)
+                throw new Error("Adapter failed to gather problem details.");
 
             const editor = await getEditorCode();
             let code = editor.code || "";
             const isCodeforces = adapter.name === "Codeforces";
 
-            const shouldFetch = (isCodeforces && adapter.getSubmissionUrl) || (!code.trim() && adapter.getSubmissionUrl);
+            const shouldFetch =
+                (isCodeforces && adapter.getSubmissionUrl) ||
+                (!code.trim() && adapter.getSubmissionUrl);
 
             if (shouldFetch) {
                 const subUrl = adapter.getSubmissionUrl();
@@ -160,8 +184,11 @@
                     if (isCodeforces && adapter.fetchSolution) {
                         res = await adapter.fetchSolution(subUrl);
                     } else {
-                        res = await new Promise(resolve => {
-                            chrome.runtime.sendMessage({ action: "fetchSubmissionCode", url: subUrl }, resolve);
+                        res = await new Promise((resolve) => {
+                            chrome.runtime.sendMessage(
+                                { action: "fetchSubmissionCode", url: subUrl },
+                                resolve,
+                            );
                         });
                     }
 
@@ -181,7 +208,11 @@
                 let prefix = "";
                 if (adapter.name === "Codeforces") prefix = "CF";
                 if (adapter.name === "HackerRank") prefix = "HR";
-                folderName = formatFolderName(data.id || data.slug, data.title, prefix);
+                folderName = formatFolderName(
+                    data.id || data.slug,
+                    data.title,
+                    prefix,
+                );
             }
 
             return {
@@ -192,7 +223,7 @@
                 suggestedExtension: extWithDot,
                 extension: extWithDot.replace(/^\./, ""),
                 url: location.href,
-                folderName: folderName
+                folderName: folderName,
             };
         } catch (err) {
             console.error("[CodeBridge] gatherProblemData failed", err);
@@ -214,7 +245,10 @@
                         const data = await gatherProblemData();
                         sendResponse({ success: true, data });
                     } catch (err) {
-                        sendResponse({ success: false, message: err.message || String(err) });
+                        sendResponse({
+                            success: false,
+                            message: err.message || String(err),
+                        });
                     }
                 })();
                 return true;
@@ -238,7 +272,9 @@
                 position: "fixed",
                 right: "18px",
                 bottom: "190px",
-                background: success ? "rgba(16,185,129,0.95)" : "rgba(239, 68, 68, 0.95)",
+                background: success
+                    ? "rgba(16,185,129,0.95)"
+                    : "rgba(239, 68, 68, 0.95)",
                 color: "#fff",
                 padding: "10px 16px",
                 borderRadius: "10px",
@@ -248,11 +284,11 @@
                 fontSize: "13px",
                 fontFamily: "Inter, sans-serif",
                 display: "block",
-                transition: "opacity 0.3s ease"
+                transition: "opacity 0.3s ease",
             });
             if (t._hideTimeout) clearTimeout(t._hideTimeout);
             t._hideTimeout = setTimeout(() => (t.style.display = "none"), 6000);
-        } catch (ex) { }
+        } catch (ex) {}
     }
 
     function ensureBubble() {
@@ -276,12 +312,19 @@
                 boxShadow: "0 8px 20px rgba(0,0,0,0.3)",
                 zIndex: "2147483647",
                 cursor: "pointer",
-                transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)"
+                transition: "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
             });
-            bubble.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L12 22"/><path d="M5 9L12 2L19 9"/></svg>';
+            bubble.innerHTML =
+                '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L12 22"/><path d="M5 9L12 2L19 9"/></svg>';
 
-            bubble.addEventListener("mouseenter", () => bubble.style.transform = "scale(1.1)");
-            bubble.addEventListener("mouseleave", () => bubble.style.transform = "scale(1)");
+            bubble.addEventListener(
+                "mouseenter",
+                () => (bubble.style.transform = "scale(1.1)"),
+            );
+            bubble.addEventListener(
+                "mouseleave",
+                () => (bubble.style.transform = "scale(1)"),
+            );
             bubble.addEventListener("click", async () => {
                 if (bubble.dataset.processing === "1") return;
                 try {
@@ -300,7 +343,7 @@
             });
 
             document.body.appendChild(bubble);
-        } catch (e) { }
+        } catch (e) {}
     }
 
     function setBubbleVisible(show) {
@@ -320,21 +363,31 @@
         _submissionObserver = new MutationObserver((mutations) => {
             for (const m of mutations) {
                 const nodes = Array.from(m.addedNodes || []);
-                const foundAccepted = nodes.some(n => ACCEPTED_RE.test(n.textContent || ""));
-                if (foundAccepted || (m.type === "characterData" && ACCEPTED_RE.test(m.target.data || ""))) {
+                const foundAccepted = nodes.some((n) =>
+                    ACCEPTED_RE.test(n.textContent || ""),
+                );
+                if (
+                    foundAccepted ||
+                    (m.type === "characterData" &&
+                        ACCEPTED_RE.test(m.target.data || ""))
+                ) {
                     debounceAutoSync();
                     if (_showBubble) setBubbleVisible(true);
                 }
             }
         });
-        _submissionObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+        _submissionObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+        });
     }
 
     function stopSubmissionObserver() {
         if (!_submissionObserver) return;
         try {
             _submissionObserver.disconnect();
-        } catch (e) { }
+        } catch (e) {}
         _submissionObserver = null;
     }
 
@@ -353,46 +406,96 @@
             _autoSaveDebounce = null;
             try {
                 const data = await gatherProblemData();
-                if (!data || !data.slug || _lastAutoSaved === data.slug) return;
-                _lastAutoSaved = data.slug;
+                if (!data) return;
+                const platform = data.platform || "";
+                const slug = data.slug || "";
+                const id = data.id || "";
+                const title = data.title || "";
+                const url = data.url || "";
+                const identifier =
+                    slug ||
+                    id ||
+                    `${platform}:${id || slug || title || url}` ||
+                    null;
+                if (!identifier || _lastAutoSaved === identifier) return;
+                _lastAutoSaved = identifier;
                 performAutoSave(data, { silent: true });
-            } catch (e) { }
+            } catch (e) {
+                console.error(
+                    "[CodeBridge] debounceAutoSync failed during gatherProblemData/performAutoSave",
+                    e,
+                );
+            }
         }, 2000);
     }
 
     async function performAutoSave(problemData, { silent = false } = {}) {
-        chrome.storage.local.get(["github_owner", "github_repo", "github_branch", "github_token", "github_file_structure", "allowUpdateDefault"], (items) => {
-            const { github_owner: owner, github_repo: repo, github_token: token } = items;
-            const branch = items.github_branch || "main";
-            if (!owner || !repo || !token) {
-                if (!silent) minimalToast("Missing GitHub config. Open popup to set owner/repo.", false);
-                return;
-            }
-
-            chrome.runtime.sendMessage({
-                action: "prepareAndUpload",
-                problemData,
-                owner, repo, branch,
-                fileOrg: items.github_file_structure || "folder",
-                allowUpdate: !!items.allowUpdateDefault
-            }, (resp) => {
-                if (chrome.runtime.lastError) {
-                    if (!silent) minimalToast("Upload failed: " + chrome.runtime.lastError.message, false);
+        chrome.storage.local.get(
+            [
+                "github_owner",
+                "github_repo",
+                "github_branch",
+                "github_token",
+                "github_file_structure",
+                "allowUpdateDefault",
+            ],
+            (items) => {
+                const {
+                    github_owner: owner,
+                    github_repo: repo,
+                    github_token: token,
+                } = items;
+                const branch = items.github_branch || "main";
+                if (!owner || !repo || !token) {
+                    if (!silent)
+                        minimalToast(
+                            "Missing GitHub config. Open popup to set owner/repo.",
+                            false,
+                        );
                     return;
                 }
-                if (!silent && resp && resp.success) {
-                    minimalToast("Uploaded to GitHub", true);
-                } else if (!silent && resp && !resp.success) {
-                    minimalToast(resp.message || "Upload failed", false);
-                }
-            });
-        });
+
+                chrome.runtime.sendMessage(
+                    {
+                        action: "prepareAndUpload",
+                        problemData,
+                        owner,
+                        repo,
+                        branch,
+                        fileOrg: items.github_file_structure || "folder",
+                        allowUpdate: !!items.allowUpdateDefault,
+                    },
+                    (resp) => {
+                        if (chrome.runtime.lastError) {
+                            if (!silent)
+                                minimalToast(
+                                    "Upload failed: " +
+                                        chrome.runtime.lastError.message,
+                                    false,
+                                );
+                            return;
+                        }
+                        if (!silent && resp && resp.success) {
+                            minimalToast("Uploaded to GitHub", true);
+                        } else if (!silent && resp && !resp.success) {
+                            minimalToast(
+                                resp.message || "Upload failed",
+                                false,
+                            );
+                        }
+                    },
+                );
+            },
+        );
     }
 
     // Initialize
     chrome.storage.local.get(["autoSave", "showBubble"], (items) => {
         _autoSaveEnabled = !!(items && items.autoSave);
-        _showBubble = items && typeof items.showBubble !== "undefined" ? !!items.showBubble : true;
+        _showBubble =
+            items && typeof items.showBubble !== "undefined"
+                ? !!items.showBubble
+                : true;
         setBubbleVisible(_showBubble);
         updateSubmissionObserver();
     });
@@ -411,5 +514,4 @@
             updateSubmissionObserver();
         }
     });
-
 })();

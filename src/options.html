@@ -1,175 +1,247 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Code Bridge - Custom Templates</title>
+        <link rel="stylesheet" href="styles.css" />
+        <style>
+            body {
+                width: 500px;
+                min-height: 600px;
+            }
 
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Code Bridge - Custom Templates</title>
-  <link rel="stylesheet" href="styles.css">
-  <style>
-    body {
-      width: 500px;
-      min-height: 600px;
-    }
+            .templates-container {
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+                padding-bottom: 20px;
+            }
 
-    .templates-container {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      padding-bottom: 20px;
-    }
+            .template-field {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
 
-    .template-field {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
+            .template-field label {
+                font-size: 14px;
+                color: var(--text-main);
+            }
 
-    .template-field label {
-      font-size: 14px;
-      color: var(--text-main);
-    }
+            .template-field textarea {
+                background: rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 12px;
+                color: white;
+                font-family: "JetBrains Mono", monospace;
+                font-size: 13px;
+                resize: vertical;
+                min-height: 80px;
+                outline: none;
+            }
 
-    .template-field textarea {
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      padding: 12px;
-      color: white;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
-      resize: vertical;
-      min-height: 80px;
-      outline: none;
-    }
+            .template-field textarea:focus {
+                border-color: var(--primary);
+                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+            }
 
-    .template-field textarea:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-    }
+            .vars-guide {
+                font-size: 11px;
+                color: var(--text-muted);
+                background: rgba(255, 255, 255, 0.05);
+                padding: 10px;
+                border-radius: 8px;
+            }
 
-    .vars-guide {
-      font-size: 11px;
-      color: var(--text-muted);
-      background: rgba(255, 255, 255, 0.05);
-      padding: 10px;
-      border-radius: 8px;
-    }
+            .vars-guide code {
+                display: inline;
+                color: var(--primary);
+                background: none;
+                padding: 0;
+            }
 
-    .vars-guide code {
-      display: inline;
-      color: var(--primary);
-      background: none;
-      padding: 0;
-    }
+            .section-title {
+                font-size: 11px;
+                font-weight: 700;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                margin-top: 10px;
+            }
+        </style>
+    </head>
 
-    .section-title {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      margin-top: 10px;
-    }
-  </style>
-</head>
+    <body class="dark-theme">
+        <div class="app-container">
+            <header>
+                <div class="logo-container">
+                    <div class="logo-icon">
+                        <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                d="M7 8L3 12L7 16"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                            <path
+                                d="M17 8L21 12L17 16"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                            <path
+                                d="M14 4L10 20"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+                    </div>
+                    <h2>Configuration</h2>
+                </div>
+                <p class="muted">
+                    Code Bridge Customization & Power User Settings
+                </p>
+            </header>
 
-<body class="dark-theme">
-  <div class="app-container">
-    <header>
-      <div class="logo-container">
-        <div class="logo-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M7 8L3 12L7 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-              stroke-linejoin="round" />
-            <path d="M17 8L21 12L17 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-              stroke-linejoin="round" />
-            <path d="M14 4L10 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-              stroke-linejoin="round" />
-          </svg>
+            <main class="templates-container">
+                <div class="section-title">General Defaults</div>
+                <div class="glass-card">
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label>Default Owner</label>
+                            <input
+                                id="owner"
+                                type="text"
+                                placeholder="your-username"
+                            />
+                        </div>
+                        <div class="input-group">
+                            <label>Default Repo</label>
+                            <input
+                                id="repo"
+                                type="text"
+                                placeholder="leetcode-solutions"
+                            />
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label>Default Branch</label>
+                            <input id="branch" type="text" value="main" />
+                        </div>
+                        <div class="input-group">
+                            <label>Problem Statement</label>
+                            <div class="checkbox-inline">
+                                <input
+                                    id="includeProblemStatement"
+                                    type="checkbox"
+                                />
+                                <label
+                                    for="includeProblemStatement"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Always include
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title">Power User Templates</div>
+
+                <div class="glass-card template-field">
+                    <label>Commit Message Template</label>
+                    <textarea
+                        id="templateCommit"
+                        placeholder="feat: solved [id] - [title] ([difficulty])"
+                    ></textarea>
+                    <div class="vars-guide">
+                        Available: <code>[id]</code>, <code>[title]</code>,
+                        <code>[difficulty]</code>, <code>[language]</code>.
+                        Note: <code>[time]</code> is not supported in commit
+                        messages.
+                    </div>
+                </div>
+
+                <div class="glass-card template-field">
+                    <label>File Path Template</label>
+                    <textarea
+                        id="templatePath"
+                        placeholder="[id]-[slug]/solution.[ext]"
+                    ></textarea>
+                    <div class="vars-guide">
+                        Available: <code>[id]</code>, <code>[slug]</code>,
+                        <code>[difficulty]</code>, <code>[ext]</code>,
+                        <code>[platform]</code>
+                    </div>
+                </div>
+
+                <div class="glass-card template-field">
+                    <label>Solution File Header (Comment)</label>
+                    <textarea
+                        id="templateSolution"
+                        placeholder="[title]\n[url]\n[difficulty]"
+                    ></textarea>
+                    <div class="vars-guide">
+                        Available: <code>[title]</code>, <code>[id]</code>,
+                        <code>[difficulty]</code>, <code>[url]</code>,
+                        <code>[time]</code>, <code>[platform]</code>. This will
+                        be automatically wrapped in comments based on the
+                        language.
+                    </div>
+                </div>
+
+                <div class="glass-card template-field">
+                    <label>README Template (Markdown)</label>
+                    <textarea
+                        id="templateReadme"
+                        placeholder="# [title]\n\n**Difficulty:** [difficulty]\n\n**Time:** [time]\n\n[url]"
+                    ></textarea>
+                    <div class="vars-guide">
+                        Available: <code>[title]</code>, <code>[id]</code>,
+                        <code>[difficulty]</code>, <code>[url]</code>,
+                        <code>[description]</code>, <code>[time]</code>,
+                        <code>[tags]</code>, <code>[platform]</code>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button id="saveBtn" class="btn primary full-width">
+                        Save Configuration
+                    </button>
+                    <button
+                        id="resetTemplates"
+                        class="btn secondary full-width"
+                        style="margin-top: 8px"
+                    >
+                        Restore Defaults
+                    </button>
+                    <button
+                        id="clearStorageBtn"
+                        class="btn secondary full-width"
+                        style="margin-top: 8px; color: var(--error)"
+                    >
+                        Danger: Clear Extension Storage
+                    </button>
+                    <div id="status" class="status-msg"></div>
+                </div>
+            </main>
         </div>
-        <h2>Configuration</h2>
-      </div>
-      <p class="muted">Code Bridge Customization & Power User Settings</p>
-    </header>
-
-    <main class="templates-container">
-      <div class="section-title">General Defaults</div>
-      <div class="glass-card">
-        <div class="form-grid">
-          <div class="input-group">
-            <label>Default Owner</label>
-            <input id="owner" type="text" placeholder="your-username" />
-          </div>
-          <div class="input-group">
-            <label>Default Repo</label>
-            <input id="repo" type="text" placeholder="leetcode-solutions" />
-          </div>
-        </div>
-        <div class="form-grid" style="margin-top:12px">
-          <div class="input-group">
-            <label>Default Branch</label>
-            <input id="branch" type="text" value="main" />
-          </div>
-          <div class="input-group">
-            <label>Problem Statement</label>
-            <div class="checkbox-inline">
-              <input id="includeProblemStatement" type="checkbox" checked />
-              <label for="includeProblemStatement" style="text-transform:none; font-size:12px; margin:0">
-                Always include
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="section-title">Power User Templates</div>
-
-      <div class="glass-card template-field">
-        <label>Commit Message Template</label>
-        <textarea id="templateCommit" placeholder="feat: solved [id] - [title] ([difficulty])"></textarea>
-        <div class="vars-guide">
-          Available: <code>[id]</code>, <code>[title]</code>, <code>[difficulty]</code>, <code>[language]</code>,
-          <code>[time]</code>
-        </div>
-      </div>
-
-      <div class="glass-card template-field">
-        <label>File Path Template</label>
-        <textarea id="templatePath" placeholder="[id]-[slug]/solution.[ext]"></textarea>
-        <div class="vars-guide">
-          Available: <code>[id]</code>, <code>[slug]</code>, <code>[difficulty]</code>, <code>[ext]</code>,
-          <code>[platform]</code>
-        </div>
-      </div>
-
-      <div class="glass-card template-field">
-        <label>Solution File Header (Comment)</label>
-        <textarea id="templateSolution" placeholder="[title]\n[url]\n[difficulty]"></textarea>
-        <div class="vars-guide">
-          Available: <code>[title]</code>, <code>[id]</code>, <code>[difficulty]</code>, <code>[url]</code>,
-          <code>[time]</code>, <code>[platform]</code>. This will be automatically wrapped in comments based on the language.
-        </div>
-      </div>
-
-      <div class="glass-card template-field">
-        <label>README Template (Markdown)</label>
-        <textarea id="templateReadme" placeholder="# [title]\n\n**Difficulty:** [difficulty]\n\n**Time:** [time]\n\n[url]"></textarea>
-        <div class="vars-guide">
-          Available: <code>[title]</code>, <code>[id]</code>, <code>[difficulty]</code>, <code>[url]</code>,
-          <code>[description]</code>, <code>[time]</code>, <code>[tags]</code>, <code>[platform]</code>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button id="saveBtn" class="btn primary full-width">Save Configuration</button>
-        <button id="resetTemplates" class="btn secondary full-width" style="margin-top: 8px;">Restore Defaults</button>
-        <button id="clearStorageBtn" class="btn secondary full-width"
-          style="margin-top: 8px; color: var(--error)">Danger: Clear Extension Storage</button>
-        <div id="status" class="status-msg"></div>
-      </div>
-    </main>
-  </div>
-  <script src="options.js"></script>
-</body>
-
+        <script src="options.js"></script>
+    </body>
 </html>

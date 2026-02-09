@@ -48,7 +48,7 @@ function decodeHtmlEntities(text) {
 
 /**
  * Generate the README markdown content
- * @param {Object} problemData 
+ * @param {Object} problemData
  * @param {string} template - optional markdown template
  * @returns {string}
  */
@@ -56,12 +56,17 @@ export function buildReadmeContent(problemData, template = null, options = {}) {
     try {
         const rawHtml = problemData.contentHtml || "";
         const descriptionClean = cleanDescription(rawHtml);
-        const description = rawHtml || descriptionClean;
+        const description = descriptionClean || rawHtml;
         const dataForTemplate = { ...problemData, description };
-        const includeProblemStatement = options.includeProblemStatement !== false;
+        const includeProblemStatement =
+            options.includeProblemStatement !== false;
 
         if (template) {
-            const templated = TemplateManager.buildReadme(dataForTemplate, template, { includeProblemStatement });
+            const templated = TemplateManager.buildReadme(
+                dataForTemplate,
+                template,
+                { includeProblemStatement },
+            );
             return appendCreditIfMissing(templated);
         }
 
@@ -90,7 +95,9 @@ export function buildReadmeContent(problemData, template = null, options = {}) {
         return lines.join("\n");
     } catch (e) {
         console.error("buildReadmeContent error:", e);
-        return appendCreditIfMissing(`# ${problemData.title || "Problem"}\n\n${problemData.url || ""}`);
+        return appendCreditIfMissing(
+            `# ${problemData.title || "Problem"}\n\n${problemData.url || ""}`,
+        );
     }
 }
 
@@ -108,27 +115,47 @@ function appendCreditIfMissing(markdown) {
  * @param {Object} templates - optional custom templates
  * @returns {Array<{path: string, content: string}>}
  */
-export function generateUploadFiles(strategy, problemData, chosenExt, templates = {}, options = {}) {
+export function generateUploadFiles(
+    strategy,
+    problemData,
+    chosenExt,
+    templates = {},
+    options = {},
+) {
     const description = cleanDescription(problemData.contentHtml || "");
     const dataWithDesc = { ...problemData, description };
     const includeProblemStatement = options.includeProblemStatement !== false;
 
     const solutionBody = problemData.code || "";
-    const readmeContent = buildReadmeContent(problemData, templates.readme, { includeProblemStatement });
+    const readmeContent = buildReadmeContent(problemData, templates.readme, {
+        includeProblemStatement,
+    });
 
     // Build the header based on user template
-    const header = TemplateManager.buildSolutionHeader(dataWithDesc, templates.solutionHeader, chosenExt);
-    let solutionContent = header ? `${header}\n\n${solutionBody}` : solutionBody;
+    const header = TemplateManager.buildSolutionHeader(
+        dataWithDesc,
+        templates.solutionHeader,
+        chosenExt,
+    );
+    let solutionContent = header
+        ? `${header}\n\n${solutionBody}`
+        : solutionBody;
     const solveTime = problemData.solveTime || "";
     const wantsDescriptionComment = description && includeProblemStatement;
-    const wantsMetaComment = !!(dataWithDesc.title || dataWithDesc.difficulty || dataWithDesc.url || solveTime);
-    if (strategy === 'flat' && (wantsDescriptionComment || wantsMetaComment)) {
+    const wantsMetaComment = !!(
+        dataWithDesc.title ||
+        dataWithDesc.difficulty ||
+        dataWithDesc.url ||
+        solveTime
+    );
+    if (strategy === "flat" && (wantsDescriptionComment || wantsMetaComment)) {
         const metaLines = [];
         if (dataWithDesc.title) metaLines.push(`Title: ${dataWithDesc.title}`);
-        if (dataWithDesc.difficulty) metaLines.push(`Difficulty: ${dataWithDesc.difficulty}`);
+        if (dataWithDesc.difficulty)
+            metaLines.push(`Difficulty: ${dataWithDesc.difficulty}`);
         if (solveTime) metaLines.push(`Time: ${solveTime}`);
         if (dataWithDesc.url) metaLines.push(`URL: ${dataWithDesc.url}`);
-        if (wantsDescriptionComment && description) {
+        if (wantsDescriptionComment) {
             metaLines.push("");
             metaLines.push(description);
         }
@@ -139,13 +166,16 @@ export function generateUploadFiles(strategy, problemData, chosenExt, templates 
     }
 
     // Strategy: FOLDER (Default)
-    if (strategy !== 'flat') {
+    if (strategy !== "flat") {
         let solutionPath = `${problemData.folderName}/solution.${chosenExt}`;
         let readmePath = `${problemData.folderName}/README.md`;
 
         if (templates.path) {
-            solutionPath = fillTemplate(templates.path, { ...problemData, extension: chosenExt });
-            const lastSlash = solutionPath.lastIndexOf('/');
+            solutionPath = fillTemplate(templates.path, {
+                ...problemData,
+                extension: chosenExt,
+            });
+            const lastSlash = solutionPath.lastIndexOf("/");
             if (lastSlash !== -1) {
                 const dir = solutionPath.substring(0, lastSlash);
                 readmePath = `${dir}/README.md`;
@@ -156,20 +186,21 @@ export function generateUploadFiles(strategy, problemData, chosenExt, templates 
 
         return [
             { path: solutionPath, content: solutionContent },
-            { path: readmePath, content: readmeContent }
+            { path: readmePath, content: readmeContent },
         ];
     }
 
     // Strategy: FLAT
     let flatPath = `${problemData.folderName}.${chosenExt}`;
     if (templates.path) {
-        flatPath = fillTemplate(templates.path, { ...problemData, extension: chosenExt });
+        flatPath = fillTemplate(templates.path, {
+            ...problemData,
+            extension: chosenExt,
+        });
     }
 
     // For flat strategy, we usually don't have a separate README, but we already prepended the header to solutionContent.
     // If the user REALLY wants the full README content for flat files, we can use the old behavior or let them decide.
     // For now, let's keep it consistent: Header + Code.
-    return [
-        { path: flatPath, content: solutionContent }
-    ];
+    return [{ path: flatPath, content: solutionContent }];
 }
