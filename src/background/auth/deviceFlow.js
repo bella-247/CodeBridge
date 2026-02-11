@@ -6,8 +6,8 @@
 // - Token polling with proper error handling (authorization_pending, slow_down, expired_token, access_denied)
 // - Persistence across service worker restarts
 
-import { log, warn, error } from "../core/logger.js";
-import { notify } from "../core/notifications.js";
+import { log, warn, error } from "../../core/logger.js";
+import { notify } from "../../core/notifications.js";
 import { setToken } from "./tokenStore.js";
 import {
     scheduleAlarmForDeviceFlow,

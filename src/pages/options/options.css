@@ -1,6 +1,9 @@
 body {
-    width: 500px;
+    width: 100%;
     min-height: 600px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .templates-container {
@@ -60,4 +63,8 @@ body {
     color: var(--text-muted);
     text-transform: uppercase;
     margin-top: 10px;
+}
+
+*::placeholder{
+    color: var(--text-muted);
 }

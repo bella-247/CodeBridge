@@ -5,7 +5,7 @@
 // GitHub's Device Flow may expect 5s polling, but after SW restart we effectively
 // poll slower (once per minute). This is unavoidable with MV3 limitations.
 
-import { log, warn } from "../core/logger.js";
+import { log, warn } from "../../core/logger.js";
 
 /**
  * Schedule a periodic alarm for device flow polling

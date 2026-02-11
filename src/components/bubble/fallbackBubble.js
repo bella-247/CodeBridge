@@ -1,8 +1,8 @@
-// leetcode/fallbackBubble.js — Emergency fallback bubble injection
+// components/bubble/fallbackBubble.js — Emergency fallback bubble injection
 // This file handles the last-resort DOM injection when content scripts fail
 // You never want to touch this unless things break.
 
-import { log } from "../core/logger.js";
+import { log } from "../../core/logger.js";
 
 /**
  * The inline bubble HTML/CSS to inject as a last resort

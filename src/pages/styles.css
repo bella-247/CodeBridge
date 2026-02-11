@@ -1,0 +1,320 @@
+/* CodeBridge Premium UI - macOS inspired Dark Theme */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+:root {
+    --bg-color: #0c0c0e;
+    --card-bg: rgba(22, 22, 26, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --text-main: #f9fafb;
+    --text-muted: #bdc2cb;
+    --primary: #7476ee;
+    --primary-glow: rgba(99, 102, 241, 0.4);
+    --secondary: #374151;
+    --accent: #10b981;
+    --error: #ef4444;
+    --easy: #10b981;
+    --medium: #f59e0b;
+    --hard: #ef4444;
+    --radius: 14px;
+    --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+}
+
+.hidden {
+    display: none !important;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg-color);
+    color: var(--text-main);
+    overflow-x: hidden;
+}
+
+/* Background Glow Effect */
+/* Background Glow Blobs for Glassmorphism */
+body::before {
+    content: "";
+    position: fixed;
+    top: -100px;
+    right: -100px;
+    width: 350px;
+    height: 350px;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.6) 0%, transparent 60%);
+    z-index: -1;
+    pointer-events: none;
+    filter: blur(60px);
+}
+
+body::after {
+    content: "";
+    position: fixed;
+    bottom: -100px;
+    left: -80px;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.4) 0%, transparent 60%);
+    z-index: -1;
+    pointer-events: none;
+    filter: blur(50px);
+}
+
+.app-container {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+
+header {
+    margin-bottom: 4px;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo-icon {
+    background: linear-gradient(135deg, var(--primary), #818cf8);
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.muted {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 4px 0 0 0;
+}
+
+/* Glasscard Styling Refined */
+.glass-card {
+    background: rgba(22, 22, 26, 0.6);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.glass-card.pop-in {
+    animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes popIn {
+    0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+h3 {
+    margin: 0 0 14px 0;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+}
+
+/* Buttons */
+.btn {
+    border: none;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: white;
+    font-family: inherit;
+    letter-spacing: 0.2px;
+}
+
+.btn:disabled,
+.btn.is-busy {
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn.primary {
+    background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+}
+
+.btn.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #e5e7eb;
+}
+
+.btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    transform: scale(1.02);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn.full-width {
+    width: 100%;
+}
+
+/* Form Elements & Grid Fix */
+.form-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    /* Keep items in row */
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.input-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    /* Allow shrinking */
+}
+
+/* Specific fix for repo and checkbox alignment */
+.checkbox-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 24px;
+}
+
+label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+input[type="text"],
+select {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: white;
+    font-size: 13px;
+    width: 100%;
+    transition: var(--transition);
+    outline: none;
+}
+
+select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(156, 163, 175, 0.8)'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 14px;
+}
+
+/* Target the dropdown menu items */
+select option {
+    background-color: #111827;
+    color: #f3f4f6;
+    padding: 12px;
+}
+
+input[type="text"]:focus,
+select:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+input[type="checkbox"] {
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
+}
+
+/* Animations */
+.animate-fade-in {
+    animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.status-msg {
+    text-align: center;
+    font-size: 12px;
+    margin-top: 10px;
+    min-height: 18px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}

@@ -163,6 +163,41 @@ export const CodeforcesAdapter = {
         return null;
     },
 
+    getProblemUrlFromSubmissionPage() {
+        try {
+            const rows = Array.from(
+                document.querySelectorAll(".datatable tr, table tr"),
+            );
+            for (const row of rows) {
+                const cells = row.querySelectorAll("td, th");
+                if (!cells || cells.length < 2) continue;
+                const label = (cells[0].textContent || "")
+                    .trim()
+                    .toLowerCase();
+                if (!label.includes("problem")) continue;
+                const link =
+                    row.querySelector('a[href*="/problem/"]') ||
+                    row.querySelector('a[href*="/problemset/problem/"]');
+                if (link && link.getAttribute("href")) {
+                    return new URL(link.getAttribute("href"), location.origin)
+                        .href;
+                }
+            }
+
+            const anyLink =
+                document.querySelector('a[href*="/problemset/problem/"]') ||
+                document.querySelector('a[href*="/contest/"][href*="/problem/"]') ||
+                document.querySelector('a[href*="/gym/"][href*="/problem/"]');
+            if (anyLink && anyLink.getAttribute("href")) {
+                return new URL(anyLink.getAttribute("href"), location.origin)
+                    .href;
+            }
+        } catch (e) {
+            // ignore
+        }
+        return null;
+    },
+
     /**
      * Main function to gather all required data for a Codeforces problem.
      * Focuses on metadata, delegating code extraction to core content.js logic.
@@ -177,7 +212,39 @@ export const CodeforcesAdapter = {
 
         let metadata = null;
         try {
-            metadata = await CodeforcesScraper.fetchMetadata();
+            const isSubmissionPage =
+                location.pathname.includes("/submission/") ||
+                document.querySelector("#program-source-text");
+            if (isSubmissionPage) {
+                const problemUrl = this.getProblemUrlFromSubmissionPage();
+                if (problemUrl) {
+                    try {
+                        const res = await fetch(problemUrl, {
+                            credentials: "include",
+                            cache: "no-store",
+                        });
+                        if (res.ok) {
+                            const html = await res.text();
+                            const doc = new DOMParser().parseFromString(
+                                html,
+                                "text/html",
+                            );
+                            metadata = CodeforcesScraper.parseMetadataFromDoc(
+                                doc,
+                                problemUrl,
+                            );
+                        }
+                    } catch (e) {
+                        console.warn(
+                            "[CodeBridge] Failed to fetch problem page from submission. Falling back.",
+                        );
+                    }
+                }
+            }
+
+            if (!metadata) {
+                metadata = await CodeforcesScraper.fetchMetadata();
+            }
         } catch (e) {
             console.warn("[CodeBridge] Metadata scrape threw. Using fallback.");
         }

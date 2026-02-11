@@ -1,7 +1,7 @@
 // github/uploadService.js — File upload logic
 // This file only thinks about "files → repo"
 
-import { log } from "../core/logger.js";
+import { log } from "../../core/logger.js";
 import { getToken } from "../auth/tokenStore.js";
 import { githubFetch } from "./githubClient.js";
 import { ensureRepoExists, getFileShaIfExists } from "./repoService.js";

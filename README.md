@@ -32,6 +32,14 @@ Full documentation is in docs/:
 - docs/security-privacy.md
 - docs/troubleshooting.md
 
+## Codeforces note
+
+Codeforces loads accepted code on the submission page. When Detect runs on a
+problem page, Code Bridge prompts you to open your last accepted submission.
+You can enable "Don't ask again (Auto Redirect)" to skip the prompt next time.
+You can also open the accepted submission manually (click the submission ID)
+and open the popup there.
+
 ## Project structure
 
 See docs/project-structure.md for the complete layout and module overview.
