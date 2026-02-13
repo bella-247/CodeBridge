@@ -3,89 +3,42 @@ import { $ } from "./popupDom.js";
 const SIGNIN_TIMEOUT_MS = 20000;
 
 export function createActions({ state, ui, getFormValues }) {
-    function getAutoRedirectSetting() {
+    const CF_SUBMISSION_PROMPT_KEY = "cf_skip_submission_prompt";
+
+    function getSkipSubmissionPromptSetting() {
         return new Promise((resolve) => {
             chrome.storage.local.get(
-                ["cf_auto_redirect_submission"],
+                [CF_SUBMISSION_PROMPT_KEY],
                 (items) =>
-                    resolve(!!items.cf_auto_redirect_submission),
+                    resolve(!!items[CF_SUBMISSION_PROMPT_KEY]),
             );
         });
     }
 
-    function setAutoRedirectSetting(value) {
+    function setSkipSubmissionPromptSetting(value) {
         return new Promise((resolve) => {
             chrome.storage.local.set(
-                { cf_auto_redirect_submission: !!value },
+                { [CF_SUBMISSION_PROMPT_KEY]: !!value },
                 () => resolve(true),
             );
         });
     }
 
-    function requestSubmissionUrl(tabId) {
-        return new Promise((resolve) => {
-            chrome.tabs.sendMessage(
-                tabId,
-                { action: "getSubmissionUrl" },
-                (response) => {
-                    if (chrome.runtime.lastError) {
-                        resolve({ error: chrome.runtime.lastError });
-                    } else {
-                        resolve({ response });
-                    }
-                },
-            );
-        });
-    }
-
-    async function handleCodeforcesRedirect(tabId, data) {
+    async function handleCodeforcesSubmissionNotice(data) {
         if (!data || data.platform !== "Codeforces") return;
         if (data.isSubmissionPage) return;
         if (data.code && data.code.trim()) return;
 
-        ui.updateStatus("Checking for accepted submission...");
+        ui.updateStatus(
+            "Open your accepted submission page and reopen the popup.",
+        );
 
-        const autoRedirect = await getAutoRedirectSetting();
-        const result = await requestSubmissionUrl(tabId);
+        const skipPrompt = await getSkipSubmissionPromptSetting();
+        if (skipPrompt) return;
 
-        if (result.error) {
-            ui.updateStatus(
-                "Script not ready. Try re-opening the popup or refreshing this page.",
-                true,
-            );
-            return;
-        }
-
-        const resp = result.response;
-        if (!resp || !resp.success || !resp.url) {
-            ui.showNoSubmissionModal();
-            ui.updateStatus("No accepted submission found.", true);
-            return;
-        }
-
-        if (state.lastProblemData) {
-            state.lastProblemData.submissionUrl = resp.url;
-        }
-
-        if (autoRedirect) {
-            ui.updateStatus("Redirecting to accepted submission...");
-            chrome.tabs.update(tabId, { url: resp.url });
-            return;
-        }
-
-        ui.updateStatus("Open your accepted submission to load the code.");
-
-        const choice = await ui.promptCodeforcesRedirect({
-            submissionUrl: resp.url,
-            autoRedirectEnabled: autoRedirect,
-        });
-
-        if (choice && choice.autoRedirect) {
-            await setAutoRedirectSetting(true);
-        }
-
-        if (choice && choice.action === "open") {
-            chrome.tabs.update(tabId, { url: resp.url });
+        const choice = await ui.promptCodeforcesSubmissionNotice();
+        if (choice && choice.dontAskAgain) {
+            await setSkipSubmissionPromptSetting(true);
         }
     }
     function startDeviceFlow() {
@@ -280,7 +233,7 @@ export function createActions({ state, ui, getFormValues }) {
 
             ui.showMeta(response.data);
             if (response.data && response.data.platform === "Codeforces") {
-                handleCodeforcesRedirect(tabId, response.data);
+                handleCodeforcesSubmissionNotice(response.data);
             }
             checkExistingSubmission();
             if (!response.data.codeError) {
@@ -351,6 +304,8 @@ export function createActions({ state, ui, getFormValues }) {
             allowUpdate,
             language,
             solveTimeRaw,
+            note,
+            commitMessage,
         } = getFormValues();
 
         if (!owner || !repo) {
@@ -373,6 +328,7 @@ export function createActions({ state, ui, getFormValues }) {
             ...state.lastProblemData,
             extension: language,
             solveTime,
+            note,
         };
 
         const payload = {
@@ -383,6 +339,7 @@ export function createActions({ state, ui, getFormValues }) {
             branch,
             fileOrg,
             allowUpdate,
+            commitMessage,
         };
 
         ui.setSaveButtonsBusy(true);

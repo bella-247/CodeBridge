@@ -15,7 +15,8 @@ export const TemplateManager = {
             const timeLine = data.solveTime ? `\n**Time:** ${data.solveTime}` : "";
             const desc = includeProblemStatement ? (data.description || data.contentHtml || "") : "";
             const problemSection = desc ? `\n\n## Problem\n\n${desc}` : "";
-            return `# ${data.title}\n\n**Difficulty:** ${data.difficulty}${timeLine}\n\n**URL:** ${data.url}${problemSection}`;
+            const note = data.note ? `\n\n## Note\n\n${data.note}` : "";
+            return `# ${data.title}\n\n**Difficulty:** ${data.difficulty}${timeLine}\n\n**URL:** ${data.url}${problemSection}${note}`;
         }
         const filled = fillTemplate(template, data);
         let result = filled;
@@ -24,6 +25,9 @@ export const TemplateManager = {
         }
         if (includeProblemStatement && data.description && !template.includes("[description]")) {
             result = `${result}\n\n## Problem\n\n${data.description}`;
+        }
+        if (data.note && !template.includes("[note]")) {
+            result = `${result}\n\n## Note\n\n${data.note}`;
         }
         return result;
     },

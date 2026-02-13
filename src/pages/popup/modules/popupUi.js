@@ -216,10 +216,7 @@ export function createUi(state) {
         }
     }
 
-    function promptCodeforcesRedirect({
-        submissionUrl,
-        autoRedirectEnabled = false,
-    } = {}) {
+    function promptCodeforcesSubmissionNotice() {
         return new Promise((resolve) => {
             const existing = document.getElementById(
                 "cb-solution-fetch-modal",
@@ -237,35 +234,25 @@ export function createUi(state) {
 
             const title = document.createElement("div");
             title.className = "cb-modal-title";
-            title.textContent = "Open your accepted submission";
+            title.textContent = "Open the submission page";
 
             const body = document.createElement("div");
             body.className = "cb-modal-body";
             body.textContent =
-                "Codeforces loads accepted code on the submission page. Click below to open your last accepted submission.";
+                "Codeforces only exposes accepted code on the submission page. Open your accepted submission, then reopen the popup.";
 
             const checkboxWrap = document.createElement("label");
             checkboxWrap.className = "cb-modal-checkbox";
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
-            checkbox.checked = !!autoRedirectEnabled;
+            checkbox.checked = false;
             const checkboxText = document.createElement("span");
-            checkboxText.textContent = "Don't ask again (Auto Redirect)";
+            checkboxText.textContent = "Don't ask again";
             checkboxWrap.appendChild(checkbox);
             checkboxWrap.appendChild(checkboxText);
 
             const actions = document.createElement("div");
             actions.className = "cb-modal-actions";
-
-            const dismissBtn = document.createElement("button");
-            dismissBtn.type = "button";
-            dismissBtn.className = "btn secondary";
-            dismissBtn.textContent = "Not now";
-
-            const openBtn = document.createElement("button");
-            openBtn.type = "button";
-            openBtn.className = "btn primary";
-            openBtn.textContent = "Open Submission";
 
             function cleanup(action) {
                 try {
@@ -273,18 +260,21 @@ export function createUi(state) {
                 } catch (e) {}
                 resolve({
                     action,
-                    autoRedirect: checkbox.checked,
+                    dontAskAgain: checkbox.checked,
                 });
             }
 
-            dismissBtn.addEventListener("click", () => cleanup("dismiss"));
-            openBtn.addEventListener("click", () => cleanup("open"));
+            const closeBtn = document.createElement("button");
+            closeBtn.type = "button";
+            closeBtn.className = "btn primary";
+            closeBtn.textContent = "Got it";
+
+            closeBtn.addEventListener("click", () => cleanup("close"));
             overlay.addEventListener("click", (e) => {
-                if (e.target === overlay) cleanup("dismiss");
+                if (e.target === overlay) cleanup("close");
             });
 
-            actions.appendChild(openBtn);
-            actions.appendChild(dismissBtn);
+            actions.appendChild(closeBtn);
             card.appendChild(title);
             card.appendChild(body);
             card.appendChild(checkboxWrap);
@@ -292,55 +282,6 @@ export function createUi(state) {
             overlay.appendChild(card);
             document.body.appendChild(overlay);
         });
-    }
-
-    function showNoSubmissionModal() {
-        const existing = document.getElementById("cb-solution-fetch-modal");
-        if (existing) {
-            existing.remove();
-        }
-
-        const overlay = document.createElement("div");
-        overlay.id = "cb-solution-fetch-modal";
-        overlay.className = "cb-modal-overlay";
-
-        const card = document.createElement("div");
-        card.className = "cb-modal-card";
-
-        const title = document.createElement("div");
-        title.className = "cb-modal-title";
-        title.textContent = "No accepted submission found";
-
-        const body = document.createElement("div");
-        body.className = "cb-modal-body";
-        body.textContent =
-            "Submit an accepted solution on Codeforces, then return to the problem page and click Detect again.";
-
-        const actions = document.createElement("div");
-        actions.className = "cb-modal-actions";
-
-        const dismissBtn = document.createElement("button");
-        dismissBtn.type = "button";
-        dismissBtn.className = "btn secondary";
-        dismissBtn.textContent = "Dismiss";
-
-        dismissBtn.addEventListener("click", () => {
-            try {
-                overlay.remove();
-            } catch (e) {}
-        });
-        overlay.addEventListener("click", (e) => {
-            if (e.target === overlay) {
-                overlay.remove();
-            }
-        });
-
-        actions.appendChild(dismissBtn);
-        card.appendChild(title);
-        card.appendChild(body);
-        card.appendChild(actions);
-        overlay.appendChild(card);
-        document.body.appendChild(overlay);
     }
 
     return {
@@ -356,7 +297,6 @@ export function createUi(state) {
         clearSubmissionStatus,
         setAuthUi,
         showMeta,
-        promptCodeforcesRedirect,
-        showNoSubmissionModal,
+        promptCodeforcesSubmissionNotice,
     };
 }

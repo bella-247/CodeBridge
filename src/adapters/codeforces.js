@@ -3,8 +3,8 @@ import { CodeforcesScraper } from '../scrapers/codeforces.js';
 /**
  * Codeforces Adapter
  *
- * This adapter orchestrates the process of finding a submission, scraping the
- * problem metadata, and extracting the solution code.
+ * This adapter orchestrates the process of scraping the problem metadata
+ * and extracting the solution code.
  */
 export const CodeforcesAdapter = {
     name: "Codeforces",
@@ -51,120 +51,62 @@ export const CodeforcesAdapter = {
         return null;
     },
 
-    getSubmissionUrl() {
-        console.log("[CodeBridge] Scanning for Codeforces submission URL (Layers of Truth)...");
-
-        // If already on a submission page, use it directly
-        if (location.pathname.includes('/submission/')) {
-            return location.href;
-        }
-        if (document.querySelector('#program-source-text')) {
-            return location.href;
-        }
-
-        const handle = this.getHandle();
-        if (!handle) {
-            console.warn("[CodeBridge] User handle not detected. Will only trust user-specific sidebar data.");
-        }
-
-        const handleLower = handle ? handle.toLowerCase() : "";
-        const canVerifyUser = !!handleLower;
-
-        const lastSubsBox = (() => {
-            const boxes = Array.from(document.querySelectorAll('.sidebox'));
-            const byCaption = boxes.find(b => {
-                const cap = b.querySelector('.caption');
-                return cap && /last submissions/i.test(cap.textContent || '');
-            });
-            if (byCaption) return byCaption;
-            return boxes.find(b => {
-                return b.querySelector('a[href*="/submission/"]') && b.querySelector('.verdict-accepted');
-            }) || null;
-        })();
-
-        const inferredSubsBox = (() => {
-            const sidebarRoot = document.querySelector('#sidebar') || document.body;
-            const links = Array.from(sidebarRoot.querySelectorAll('a[href*="/submission/"]'));
-            for (const link of links) {
-                const row = link.closest('tr');
-                if (row && row.querySelector('.verdict-accepted')) {
-                    return link.closest('.sidebox') || null;
-                }
-            }
-            return null;
-        })();
-
-        const trustedContainers = [lastSubsBox, inferredSubsBox]
-            .filter(Boolean);
-
-        // Strategy A: Sidebar Extraction (High Performance, High Trust)
-        // Problems often have a "Last submissions" sidebar.
-        const sideProblemSubs = document.querySelector('.side-problem-submissions');
-        if (sideProblemSubs) trustedContainers.push(sideProblemSubs);
-
-        const sidebar = lastSubsBox || sideProblemSubs || document.querySelector('#sidebar');
-        if (sidebar && sidebar.querySelector('a[href*="/submission/"]') && sidebar.querySelector('.verdict-accepted')) {
-            trustedContainers.push(sidebar);
-        }
-        if (sidebar) {
-            console.log("[CodeBridge] Checking sidebar for submissions...");
-            const sidebarLinks = Array.from(sidebar.querySelectorAll('a[href*="/submission/"]'));
-            for (const link of sidebarLinks) {
-                const row = link.closest('tr') || link.parentElement;
-                const text = row.innerText || "";
-                const textLower = text.toLowerCase();
-                const isTrustedContext = trustedContainers.some(c => c && c.contains(link));
-
-                // Integrity checks: 
-                // 1. Is it 'Accepted'?
-                // 2. If we have a handle, does it belong to the user?
-                const isAccepted = /Accepted|OK/i.test(text) || row.querySelector('.verdict-accepted');
-                const isUserSubmission = isTrustedContext || (canVerifyUser &&
-                    (textLower.includes(handleLower) ||
-                    Array.from(row.querySelectorAll('a[href^="/profile/"]'))
-                        .some(a => (a.getAttribute('href') || '').toLowerCase() === `/profile/${handleLower}`)));
-
-                if (isAccepted && isUserSubmission) {
-                    const solUrl = new URL(link.getAttribute('href'), location.origin).href;
-                    console.log(`[CodeBridge] Found user's accepted submission in sidebar: ${solUrl}`);
-                    return solUrl;
-                }
-            }
-        }
-
-        // Strategy B: Full Page Scan (Fallback)
-        if (!canVerifyUser) {
-            console.warn("[CodeBridge] Skipping full-page scan without a verified handle.");
-            return null;
-        }
-
-        console.log("[CodeBridge] Sidebar search failed. Scanning entire page...");
-        const allLinks = Array.from(document.querySelectorAll('a[href*="/submission/"]'));
-
-        for (const link of allLinks) {
-            const row = link.closest('tr') || link.parentElement;
-            if (!row) continue;
-
-            const text = row.innerText || "";
-            const textLower = text.toLowerCase();
-            const isAccepted = /Accepted|OK/i.test(text) || row.querySelector('.verdict-accepted');
-            const isUserSubmission = textLower.includes(handleLower) ||
-                Array.from(row.querySelectorAll('a[href^="/profile/"]'))
-                    .some(a => (a.getAttribute('href') || '').toLowerCase() === `/profile/${handleLower}`);
-
-            if (isAccepted && isUserSubmission) {
-                const absoluteUrl = new URL(link.getAttribute('href'), location.origin).href;
-                console.log(`[CodeBridge] Found user's accepted submission link: ${absoluteUrl}`);
-                return absoluteUrl;
-            }
-        }
-
-        console.warn("[CodeBridge] No 'Accepted' submission link found for this user.");
-        return null;
-    },
-
     getProblemUrlFromSubmissionPage() {
         try {
+            const tables = Array.from(
+                document.querySelectorAll(".datatable, table"),
+            );
+
+            for (const table of tables) {
+                const rows = Array.from(table.querySelectorAll("tr"));
+                if (!rows.length) continue;
+
+                let headerCells = Array.from(
+                    rows[0].querySelectorAll("th, td"),
+                );
+                let problemIdx = headerCells.findIndex((cell) =>
+                    /problem/i.test(cell.textContent || ""),
+                );
+
+                const headRow = table.querySelector("thead tr");
+                if (problemIdx === -1 && headRow) {
+                    headerCells = Array.from(
+                        headRow.querySelectorAll("th, td"),
+                    );
+                    problemIdx = headerCells.findIndex((cell) =>
+                        /problem/i.test(cell.textContent || ""),
+                    );
+                }
+
+                if (problemIdx !== -1) {
+                    const bodyRows = rows.slice(1);
+                    for (const row of bodyRows) {
+                        const cells = Array.from(
+                            row.querySelectorAll("td, th"),
+                        );
+                        if (cells.length <= problemIdx) continue;
+                        const cell = cells[problemIdx];
+                        const link =
+                            cell.querySelector(
+                                'a[href*="/problemset/problem/"]',
+                            ) ||
+                            cell.querySelector(
+                                'a[href*="/contest/"][href*="/problem/"]',
+                            ) ||
+                            cell.querySelector(
+                                'a[href*="/gym/"][href*="/problem/"]',
+                            ) ||
+                            cell.querySelector('a[href*="/problem/"]');
+                        if (link && link.getAttribute("href")) {
+                            return new URL(
+                                link.getAttribute("href"),
+                                location.origin,
+                            ).href;
+                        }
+                    }
+                }
+            }
+
             const rows = Array.from(
                 document.querySelectorAll(".datatable tr, table tr"),
             );

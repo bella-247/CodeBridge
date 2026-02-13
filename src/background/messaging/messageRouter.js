@@ -68,7 +68,8 @@ async function handlePrepareAndUpload(message) {
         repo,
         branch,
         fileOrg, // 'folder' or 'flat'
-        allowUpdate
+        allowUpdate,
+        commitMessage: customCommitMessage
     } = message;
 
     if (!problemData || !owner || !repo) {
@@ -100,7 +101,10 @@ async function handlePrepareAndUpload(message) {
         const files = generateUploadFiles(fileOrg, problemData, ext, templates, { includeProblemStatement });
 
         // Commit message
-        const commitMessage = TemplateManager.populateAll(problemData, templates, ext).commit;
+        let commitMessage = TemplateManager.populateAll(problemData, templates, ext).commit;
+        if (customCommitMessage && customCommitMessage.trim()) {
+            commitMessage = fillTemplate(customCommitMessage.trim(), problemData);
+        }
 
         const res = await uploadFilesToRepo({
             owner,

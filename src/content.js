@@ -101,20 +101,6 @@
         return prefix ? `${prefix}-${name}` : name;
     }
 
-    function waitMs(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    async function waitForSubmissionUrl(adapter, { timeoutMs = 2500, intervalMs = 250 } = {}) {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            const url = adapter.getSubmissionUrl();
-            if (url) return url;
-            await waitMs(intervalMs);
-        }
-        return null;
-    }
-
     function extractCodeforcesSubmissionFromDom() {
         try {
             const codeEl =
@@ -247,21 +233,16 @@
                 adapter.getSubmissionUrl &&
                 !skipSolutionFetch &&
                 !isCfSubmissionPage &&
-                !code.trim();
+                !code.trim() &&
+                !isCodeforces;
 
             if (shouldFetch) {
-                let subUrl = adapter.getSubmissionUrl();
-                if (!subUrl && isCodeforces) {
-                    subUrl = await waitForSubmissionUrl(adapter, {
-                        timeoutMs: 8000,
-                        intervalMs: 400,
-                    });
-                }
+                const subUrl = adapter.getSubmissionUrl();
                 if (subUrl) {
                     console.log("[CodeBridge] Fetching submission:", subUrl);
                     let res = null;
 
-                    if (isCodeforces && adapter.fetchSolution) {
+                    if (adapter.fetchSolution) {
                         res = await adapter.fetchSolution(subUrl);
                     } else {
                         res = await new Promise((resolve) => {
@@ -287,9 +268,6 @@
                             "Submission fetch did not return a response.";
                     }
                     data.submissionUrl = subUrl;
-                } else if (isCodeforces) {
-                    data.codeError =
-                        "No accepted submission link found in the page sidebar (after waiting).";
                 }
             }
 
@@ -342,40 +320,6 @@
                             message.options || {},
                         );
                         sendResponse({ success: true, data });
-                    } catch (err) {
-                        sendResponse({
-                            success: false,
-                            message: err.message || String(err),
-                        });
-                    }
-                })();
-                return true;
-            case "getSubmissionUrl":
-                (async () => {
-                    try {
-                        const adapter = await loadAdapter();
-                        if (!adapter || !adapter.getSubmissionUrl) {
-                            sendResponse({
-                                success: false,
-                                message:
-                                    "Submission lookup not supported on this platform.",
-                            });
-                            return;
-                        }
-                        const url = await waitForSubmissionUrl(adapter, {
-                            timeoutMs: 8000,
-                            intervalMs: 400,
-                        });
-                        if (!url) {
-                            sendResponse({
-                                success: false,
-                                kind: "no_submission",
-                                message:
-                                    "No accepted submission link found in the page sidebar.",
-                            });
-                            return;
-                        }
-                        sendResponse({ success: true, url });
                     } catch (err) {
                         sendResponse({
                             success: false,

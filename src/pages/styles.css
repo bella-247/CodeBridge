@@ -230,7 +230,8 @@ label {
 }
 
 input[type="text"],
-select {
+select,
+textarea {
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 10px;
@@ -258,11 +259,19 @@ select option {
 }
 
 input[type="text"]:focus,
-select:focus {
+select:focus,
+textarea:focus {
     outline: none;
     border-color: var(--primary);
     background: rgba(255, 255, 255, 0.08);
     box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 72px;
+    font-family: inherit;
+    line-height: 1.4;
 }
 
 .checkbox-group {

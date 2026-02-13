@@ -36,6 +36,12 @@ export function initPopup() {
         const solveTimeRaw = solveTimeEl
             ? (solveTimeEl.value || "").trim()
             : "";
+        const noteEl = document.getElementById("note");
+        const note = noteEl ? (noteEl.value || "").trim() : "";
+        const commitEl = document.getElementById("commitMessage");
+        const commitMessage = commitEl
+            ? (commitEl.value || "").trim()
+            : "";
 
         return {
             owner,
@@ -46,6 +52,8 @@ export function initPopup() {
             showBubble,
             language,
             solveTimeRaw,
+            note,
+            commitMessage,
         };
     };
 
