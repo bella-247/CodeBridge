@@ -1,6 +1,8 @@
 body {
     width: 400px;
     min-height: 520px;
+    border-bottom-left-radius: 2rem;
+    border-bottom-right-radius: 2rem;
 }
 
 #workflowPanel {

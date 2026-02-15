@@ -11,6 +11,7 @@ const SESSION_DEFAULTS = {
     AUTO_START_DELAY_SECONDS: 10,
     SUPPORTED_PLATFORMS_ENABLED: ["codeforces", "leetcode"],
     SHOW_TIMER_OVERLAY: true,
+    TIMER_OVERLAY_SIZE: "medium",
 };
 
 function loadOptions() {
@@ -32,6 +33,7 @@ function loadOptions() {
             "AUTO_START_DELAY_SECONDS",
             "SUPPORTED_PLATFORMS_ENABLED",
             "SHOW_TIMER_OVERLAY",
+            "TIMER_OVERLAY_SIZE",
         ],
         (items) => {
             if (items) {
@@ -98,6 +100,10 @@ function loadOptions() {
                     typeof items.SHOW_TIMER_OVERLAY === "boolean"
                         ? items.SHOW_TIMER_OVERLAY
                         : SESSION_DEFAULTS.SHOW_TIMER_OVERLAY;
+                const timerOverlaySize =
+                    typeof items.TIMER_OVERLAY_SIZE === "string"
+                        ? items.TIMER_OVERLAY_SIZE
+                        : SESSION_DEFAULTS.TIMER_OVERLAY_SIZE;
 
                 if ($("sessionPruneDays"))
                     $("sessionPruneDays").value = String(pruneDays);
@@ -115,6 +121,8 @@ function loadOptions() {
                         platforms.includes("leetcode");
                 if ($("showTimerOverlay"))
                     $("showTimerOverlay").checked = !!showTimerOverlay;
+                if ($("timerOverlaySize"))
+                    $("timerOverlaySize").value = timerOverlaySize;
             }
         },
     );
@@ -164,6 +172,13 @@ function saveOptions() {
     const showTimerOverlay = $("showTimerOverlay")
         ? $("showTimerOverlay").checked
         : SESSION_DEFAULTS.SHOW_TIMER_OVERLAY;
+    const timerOverlaySizeRaw = $("timerOverlaySize")
+        ? $("timerOverlaySize").value
+        : SESSION_DEFAULTS.TIMER_OVERLAY_SIZE;
+    const allowedSizes = ["small", "medium", "large"];
+    const timerOverlaySize = allowedSizes.includes(timerOverlaySizeRaw)
+        ? timerOverlaySizeRaw
+        : SESSION_DEFAULTS.TIMER_OVERLAY_SIZE;
 
     const autoStartDelay = Number.isFinite(autoStartDelayRaw)
         ? Math.max(0, autoStartDelayRaw)
@@ -194,6 +209,7 @@ function saveOptions() {
             ? platformsEnabled
             : SESSION_DEFAULTS.SUPPORTED_PLATFORMS_ENABLED,
         SHOW_TIMER_OVERLAY: !!showTimerOverlay,
+        TIMER_OVERLAY_SIZE: timerOverlaySize,
     };
 
     chrome.storage.local.set(toSave, () => {

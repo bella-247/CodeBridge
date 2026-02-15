@@ -4,6 +4,7 @@ import { createAdapter, normalizeVerdict } from "./baseAdapter.js";
 
 const VERDICT_KEYWORDS = [
     "Accepted",
+    "Passed",
     "Wrong Answer",
     "Time Limit Exceeded",
     "Runtime Error",
@@ -12,6 +13,23 @@ const VERDICT_KEYWORDS = [
     "Output Limit Exceeded",
     "Presentation Error",
 ];
+
+const RESULT_SELECTORS = [
+    "[data-e2e-locator='submission-result']",
+    "[data-testid='submission-result']",
+    ".result__title",
+    ".result__status",
+];
+
+function isElementVisible(el) {
+    if (!el) return false;
+    const style = window.getComputedStyle ? getComputedStyle(el) : null;
+    if (style) {
+        if (style.display === "none" || style.visibility === "hidden") return false;
+        if (style.opacity === "0") return false;
+    }
+    return el.getClientRects().length > 0;
+}
 
 function extractSlugFromUrl(url) {
     try {
@@ -53,25 +71,14 @@ function extractDifficulty() {
 }
 
 function extractVerdictText() {
-    const direct =
-        document.querySelector("[data-e2e-locator='submission-result']") ||
-        document.querySelector("[data-testid='submission-result']") ||
-        document.querySelector(".result__title") ||
-        document.querySelector(".result__status");
-
-    if (direct && direct.textContent) {
-        const text = direct.textContent.trim();
-        if (text) return text;
+    for (const selector of RESULT_SELECTORS) {
+        const el = document.querySelector(selector);
+        if (!el || !isElementVisible(el)) continue;
+        const text = (el.textContent || "").trim();
+        if (!text) continue;
+        const match = VERDICT_KEYWORDS.find((keyword) => text.includes(keyword));
+        if (match) return match;
     }
-
-    const nodes = Array.from(document.querySelectorAll("span, div"));
-    for (const node of nodes) {
-        const text = (node.textContent || "").trim();
-        if (VERDICT_KEYWORDS.includes(text)) {
-            return text;
-        }
-    }
-
     return null;
 }
 
@@ -99,7 +106,7 @@ function extractLanguage() {
 function extractSubmissionData() {
     const verdict = normalizeVerdict(extractVerdictText());
     const language = extractLanguage();
-    if (!verdict && !language) return null;
+    if (!verdict) return null;
     return { verdict, language };
 }
 

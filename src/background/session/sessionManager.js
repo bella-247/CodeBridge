@@ -1,7 +1,14 @@
 // background/session/sessionManager.js — Core session lifecycle
 
 import { loadSessions, saveSessions } from "./storageManager.js";
-import { nowSeconds, startTimer, stopTimer } from "./timerEngine.js";
+import {
+    nowSeconds,
+    startTimer,
+    stopTimer,
+    pauseTimer,
+    resumeTimer,
+    resetTimer,
+} from "./timerEngine.js";
 
 function normalizeDifficulty(value) {
     if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -40,6 +47,9 @@ export async function upsertSession({
             verdict: null,
             language: null,
             attemptCount: 0,
+            elapsedSeconds: 0,
+            isPaused: false,
+            pausedAt: null,
             firstSeen: now,
             lastSeen: now,
             lastUpdated: now,
@@ -75,6 +85,9 @@ export async function startSessionTimer({ platform, problemId, startedAt = null 
             verdict: null,
             language: null,
             attemptCount: 0,
+            elapsedSeconds: 0,
+            isPaused: false,
+            pausedAt: null,
             firstSeen: now,
             lastSeen: now,
             lastUpdated: now,
@@ -97,6 +110,42 @@ export async function stopSessionTimer({ platform, problemId, stoppedAt = null }
 
     const session = sessions[idx];
     stopTimer(session, stoppedAt || nowSeconds());
+    session.lastUpdated = nowSeconds();
+    await saveSessions(sessions);
+    return session;
+}
+
+export async function pauseSessionTimer({ platform, problemId, pausedAt = null }) {
+    const sessions = await loadSessions();
+    const idx = findSessionIndex(sessions, platform, problemId);
+    if (idx === -1) return null;
+
+    const session = sessions[idx];
+    pauseTimer(session, pausedAt || nowSeconds());
+    session.lastUpdated = nowSeconds();
+    await saveSessions(sessions);
+    return session;
+}
+
+export async function resumeSessionTimer({ platform, problemId, resumedAt = null }) {
+    const sessions = await loadSessions();
+    const idx = findSessionIndex(sessions, platform, problemId);
+    if (idx === -1) return null;
+
+    const session = sessions[idx];
+    resumeTimer(session, resumedAt || nowSeconds());
+    session.lastUpdated = nowSeconds();
+    await saveSessions(sessions);
+    return session;
+}
+
+export async function resetSessionTimer({ platform, problemId }) {
+    const sessions = await loadSessions();
+    const idx = findSessionIndex(sessions, platform, problemId);
+    if (idx === -1) return null;
+
+    const session = sessions[idx];
+    resetTimer(session);
     session.lastUpdated = nowSeconds();
     await saveSessions(sessions);
     return session;
@@ -125,6 +174,9 @@ export async function recordSubmission({
             verdict: null,
             language: null,
             attemptCount: 0,
+            elapsedSeconds: 0,
+            isPaused: false,
+            pausedAt: null,
             firstSeen: now,
             lastSeen: now,
             lastUpdated: now,
@@ -147,7 +199,10 @@ export async function recordSubmission({
     session.lastUpdated = now;
 
     if (isAcceptedVerdict(verdict)) {
-        if (!session.startTime) {
+        const elapsed = Number.isFinite(session.elapsedSeconds)
+            ? session.elapsedSeconds
+            : 0;
+        if (!session.startTime && elapsed === 0) {
             session.startTime = session.firstSeen || now;
         }
         stopTimer(session, now);

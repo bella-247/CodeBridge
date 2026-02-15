@@ -4,7 +4,7 @@
 :root {
     --bg-color: #0c0c0e;
     --card-bg: rgba(22, 22, 26, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.2);
     --text-main: #f9fafb;
     --text-muted: #bdc2cb;
     --primary: #7476ee;

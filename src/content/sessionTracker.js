@@ -58,6 +58,10 @@ async function refreshSettings() {
     if (typeof merged.SHOW_TIMER_OVERLAY !== "boolean") {
         merged.SHOW_TIMER_OVERLAY = SESSION_DEFAULTS.SHOW_TIMER_OVERLAY;
     }
+    const allowedSizes = ["small", "medium", "large"];
+    if (!allowedSizes.includes(merged.TIMER_OVERLAY_SIZE)) {
+        merged.TIMER_OVERLAY_SIZE = SESSION_DEFAULTS.TIMER_OVERLAY_SIZE;
+    }
     settings = merged;
     return settings;
 }
@@ -151,16 +155,37 @@ function ensureTimerStyles() {
             top: 16px;
             right: 16px;
             z-index: 2147483650;
-            background: rgba(15, 23, 42, 0.92);
+            background: rgba(7, 12, 20, 0.96);
             color: #f8fafc;
             border-radius: 12px;
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            box-shadow: 0 14px 32px rgba(0,0,0,0.35);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            box-shadow: 0 16px 34px rgba(0,0,0,0.45);
             padding: 10px 12px;
-            min-width: 160px;
+            min-width: 140px;
             font-family: "JetBrains Mono", monospace;
-            backdrop-filter: blur(8px);
+            backdrop-filter: blur(10px);
             touch-action: none;
+        }
+        #cb-timer-overlay[data-size="small"] {
+            min-width: 120px;
+            padding: 8px 10px;
+        }
+        #cb-timer-overlay[data-size="small"] .cb-timer-time {
+            font-size: 16px;
+        }
+        #cb-timer-overlay[data-size="medium"] {
+            min-width: 140px;
+            padding: 10px 12px;
+        }
+        #cb-timer-overlay[data-size="medium"] .cb-timer-time {
+            font-size: 19px;
+        }
+        #cb-timer-overlay[data-size="large"] {
+            min-width: 168px;
+            padding: 12px 14px;
+        }
+        #cb-timer-overlay[data-size="large"] .cb-timer-time {
+            font-size: 22px;
         }
         #cb-timer-overlay .cb-timer-header {
             display: flex;
@@ -169,19 +194,41 @@ function ensureTimerStyles() {
             gap: 8px;
             cursor: grab;
             user-select: none;
-            font-size: 11px;
-            opacity: 0.75;
+        }
+        #cb-timer-overlay .cb-timer-drag {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: rgba(226, 232, 240, 0.65);
+        }
+        #cb-timer-overlay .cb-timer-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(148, 163, 184, 0.6);
+        }
+        #cb-timer-overlay[data-state="idle"] .cb-timer-indicator {
+            box-shadow: none;
+        }
+        #cb-timer-overlay[data-state="running"] .cb-timer-indicator {
+            background: #22c55e;
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.6);
+        }
+        #cb-timer-overlay[data-state="paused"] .cb-timer-indicator {
+            background: #f59e0b;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+        }
+        #cb-timer-overlay[data-state="completed"] .cb-timer-indicator {
+            background: #38bdf8;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
         }
         #cb-timer-overlay .cb-timer-time {
-            font-size: 18px;
+            font-size: 19px;
             font-weight: 700;
-            letter-spacing: 0.06em;
+            letter-spacing: 0.08em;
             margin-top: 6px;
-        }
-        #cb-timer-overlay .cb-timer-status {
-            font-size: 11px;
-            color: rgba(226,232,240,0.8);
-            margin-top: 4px;
+            line-height: 1;
+            text-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
         }
         #cb-timer-overlay .cb-timer-close {
             border: none;
@@ -196,20 +243,33 @@ function ensureTimerStyles() {
         #cb-timer-overlay .cb-timer-close:hover {
             background: rgba(148,163,184,0.35);
         }
-        #cb-timer-overlay .cb-timer-start {
+        #cb-timer-overlay .cb-timer-controls {
+            display: flex;
+            gap: 6px;
             margin-top: 8px;
-            width: 100%;
-            padding: 6px 8px;
+        }
+        #cb-timer-overlay .cb-timer-btn {
+            width: 28px;
+            height: 28px;
             border-radius: 8px;
-            border: none;
-            background: #16a34a;
-            color: #fff;
-            font-size: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            background: rgba(148, 163, 184, 0.15);
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
         }
-        #cb-timer-overlay .cb-timer-start:disabled {
-            opacity: 0.6;
+        #cb-timer-overlay .cb-timer-btn:hover {
+            background: rgba(148, 163, 184, 0.28);
+        }
+        #cb-timer-overlay .cb-timer-btn:disabled {
+            opacity: 0.45;
             cursor: default;
+        }
+        #cb-timer-overlay .cb-timer-btn svg {
+            width: 14px;
+            height: 14px;
         }
     `;
     (document.head || document.documentElement).appendChild(style);
@@ -225,7 +285,16 @@ async function ensureTimerOverlay(platformKey) {
 
         const header = document.createElement("div");
         header.className = "cb-timer-header";
-        header.textContent = "Session Timer";
+
+        const dragWrap = document.createElement("div");
+        dragWrap.className = "cb-timer-drag";
+        dragWrap.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="7" r="1.6"/><circle cx="12" cy="7" r="1.6"/><circle cx="18" cy="7" r="1.6"/><circle cx="6" cy="17" r="1.6"/><circle cx="12" cy="17" r="1.6"/><circle cx="18" cy="17" r="1.6"/></svg>';
+
+        const indicator = document.createElement("span");
+        indicator.className = "cb-timer-indicator";
+        indicator.title = "Idle";
+        dragWrap.appendChild(indicator);
 
         const closeBtn = document.createElement("button");
         closeBtn.type = "button";
@@ -237,33 +306,57 @@ async function ensureTimerOverlay(platformKey) {
             overlayState = null;
         });
 
+        header.appendChild(dragWrap);
         header.appendChild(closeBtn);
 
         const time = document.createElement("div");
         time.className = "cb-timer-time";
         time.textContent = "00:00:00";
 
-        const status = document.createElement("div");
-        status.className = "cb-timer-status";
-        status.textContent = "Waiting to start";
+        const controls = document.createElement("div");
+        controls.className = "cb-timer-controls";
 
-        const startBtn = document.createElement("button");
-        startBtn.type = "button";
-        startBtn.className = "cb-timer-start";
-        startBtn.textContent = "Start Timer";
+        const playBtn = document.createElement("button");
+        playBtn.type = "button";
+        playBtn.className = "cb-timer-btn cb-timer-play";
+        playBtn.title = "Start";
+        playBtn.setAttribute("aria-label", "Start timer");
+        playBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+
+        const pauseBtn = document.createElement("button");
+        pauseBtn.type = "button";
+        pauseBtn.className = "cb-timer-btn cb-timer-pause";
+        pauseBtn.title = "Pause";
+        pauseBtn.setAttribute("aria-label", "Pause timer");
+        pauseBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+
+        const resetBtn = document.createElement("button");
+        resetBtn.type = "button";
+        resetBtn.className = "cb-timer-btn cb-timer-reset";
+        resetBtn.title = "Reset";
+        resetBtn.setAttribute("aria-label", "Reset timer");
+        resetBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.34-5.66L4 4v6h6L7.86 7.86A6 6 0 1 1 6 12z"/></svg>';
 
         overlay.appendChild(header);
         overlay.appendChild(time);
-        overlay.appendChild(status);
-        overlay.appendChild(startBtn);
+        overlay.appendChild(controls);
+
+        controls.appendChild(playBtn);
+        controls.appendChild(pauseBtn);
+        controls.appendChild(resetBtn);
 
         document.body.appendChild(overlay);
 
         overlayState = {
             el: overlay,
             timeEl: time,
-            statusEl: status,
-            startBtn,
+            indicatorEl: indicator,
+            playBtn,
+            pauseBtn,
+            resetBtn,
             headerEl: header,
             platformKey,
         };
@@ -274,6 +367,7 @@ async function ensureTimerOverlay(platformKey) {
         const onPointerDown = (event) => {
             if (!overlayState || !overlayState.el) return;
             if (event.target && event.target.closest(".cb-timer-close")) return;
+            if (event.target && event.target.closest(".cb-timer-btn")) return;
             isDragging = true;
             const rect = overlayState.el.getBoundingClientRect();
             dragOffset = {
@@ -350,6 +444,21 @@ function formatElapsed(seconds) {
     const minutes = Math.floor((total % 3600) / 60);
     const secs = total % 60;
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function getElapsedSecondsFromSession(session) {
+    if (!session) return 0;
+    const hasElapsed = Number.isFinite(session.elapsedSeconds);
+    if (!hasElapsed) {
+        if (!session.startTime) return 0;
+        const end = session.endTime || nowSeconds();
+        return Math.max(0, end - session.startTime);
+    }
+    const base = session.elapsedSeconds || 0;
+    if (session.startTime && !session.endTime && !session.isPaused) {
+        return base + Math.max(0, nowSeconds() - session.startTime);
+    }
+    return Math.max(0, base);
 }
 
 function fetchSession(platform, problemId) {
@@ -459,52 +568,134 @@ async function setupTimerOverlay({
     if (!overlay) return;
 
     let snapshot = await fetchSession(platformKey, problemId);
-    if (snapshot && snapshot.startTime) {
+    if (
+        snapshot &&
+        (snapshot.startTime ||
+            snapshot.endTime ||
+            snapshot.isPaused ||
+            (snapshot.elapsedSeconds || 0) > 0)
+    ) {
         timerStartSent.add(sessionKey);
     }
 
     const updateDisplay = () => {
-        const started = snapshot && snapshot.startTime;
-        const ended = snapshot && snapshot.endTime;
-        const elapsed = started
-            ? (ended || nowSeconds()) - snapshot.startTime
-            : 0;
+        if (!overlay || !overlay.el) return;
+
+        const started = !!(snapshot && snapshot.startTime);
+        const ended = !!(snapshot && snapshot.endTime);
+        const paused = !!(snapshot && snapshot.isPaused);
+        const elapsed = getElapsedSecondsFromSession(snapshot);
+
+        overlay.el.dataset.size = settings.TIMER_OVERLAY_SIZE || "medium";
+
+        let state = "idle";
+        if (ended) state = "completed";
+        else if (paused) state = "paused";
+        else if (started) state = "running";
+        overlay.el.dataset.state = state;
 
         overlay.timeEl.textContent = formatElapsed(elapsed);
 
-        if (!started) {
-            overlay.statusEl.textContent =
-                settings.TIMER_START_MODE === "MANUAL"
-                    ? "Manual start"
-                    : "Waiting to start";
-        } else if (ended) {
-            overlay.statusEl.textContent = "Completed";
-        } else {
-            overlay.statusEl.textContent = "Running";
+        if (overlay.indicatorEl) {
+            let title = "Waiting";
+            if (state === "running") title = "Running";
+            if (state === "paused") title = "Paused";
+            if (state === "completed") title = "Completed";
+            if (state === "idle" && settings.TIMER_START_MODE === "MANUAL") {
+                title = "Manual start";
+            }
+            overlay.indicatorEl.title = title;
         }
 
-        if (settings.TIMER_START_MODE === "MANUAL") {
-            overlay.startBtn.style.display = "block";
-            overlay.startBtn.disabled = !!started;
-            overlay.startBtn.textContent = started
-                ? "Timer Running"
-                : "Start Timer";
-        } else {
-            overlay.startBtn.style.display = "none";
-        }
+        const canPlay = state !== "running";
+        const canPause = state === "running";
+        const hasAnyTime = elapsed > 0 || started || ended;
+
+        overlay.playBtn.disabled = !canPlay;
+        overlay.pauseBtn.disabled = !canPause;
+        overlay.resetBtn.disabled = !hasAnyTime;
+
+        let playTitle = "Start";
+        if (state === "paused") playTitle = "Resume";
+        if (state === "completed") playTitle = "Start new session";
+        overlay.playBtn.title = playTitle;
+        overlay.playBtn.setAttribute("aria-label", playTitle);
     };
 
-    overlay.startBtn.onclick = () => {
-        if (timerStartSent.has(sessionKey)) return;
+    overlay.playBtn.onclick = () => {
+        const now = nowSeconds();
+        const ended = snapshot && snapshot.endTime;
+        if (ended) {
+            sendSessionEvent("timer_reset", {
+                ...basePayload,
+                resetAt: now,
+            });
+            snapshot = {
+                ...(snapshot || {}),
+                startTime: null,
+                endTime: null,
+                elapsedSeconds: 0,
+                isPaused: false,
+                pausedAt: null,
+            };
+        }
+
+        if (timerStartSent.has(sessionKey) && snapshot && snapshot.startTime) {
+            return;
+        }
+
         timerStartSent.add(sessionKey);
         sendSessionEvent("timer_start", {
             ...basePayload,
-            startedAt: nowSeconds(),
+            startedAt: now,
         });
         snapshot = {
             ...(snapshot || {}),
-            startTime: nowSeconds(),
+            startTime: now,
             endTime: null,
+            isPaused: false,
+            pausedAt: null,
+            elapsedSeconds:
+                snapshot && Number.isFinite(snapshot.elapsedSeconds)
+                    ? snapshot.elapsedSeconds
+                    : 0,
+        };
+        updateDisplay();
+    };
+
+    overlay.pauseBtn.onclick = () => {
+        if (!snapshot || !snapshot.startTime || snapshot.isPaused) return;
+        const now = nowSeconds();
+        sendSessionEvent("timer_pause", {
+            ...basePayload,
+            pausedAt: now,
+        });
+        const baseElapsed = Number.isFinite(snapshot.elapsedSeconds)
+            ? snapshot.elapsedSeconds
+            : 0;
+        snapshot = {
+            ...(snapshot || {}),
+            elapsedSeconds: baseElapsed + Math.max(0, now - snapshot.startTime),
+            startTime: null,
+            isPaused: true,
+            pausedAt: now,
+        };
+        updateDisplay();
+    };
+
+    overlay.resetBtn.onclick = () => {
+        const now = nowSeconds();
+        sendSessionEvent("timer_reset", {
+            ...basePayload,
+            resetAt: now,
+        });
+        snapshot = {
+            ...(snapshot || {}),
+            startTime: null,
+            endTime: null,
+            elapsedSeconds: 0,
+            isPaused: false,
+            pausedAt: null,
         };
         updateDisplay();
     };
@@ -518,7 +709,14 @@ async function setupTimerOverlay({
             const latest = await fetchSession(platformKey, problemId);
             if (latest) {
                 snapshot = latest;
-                if (snapshot.startTime) timerStartSent.add(sessionKey);
+                if (
+                    snapshot.startTime ||
+                    snapshot.endTime ||
+                    snapshot.isPaused ||
+                    (snapshot.elapsedSeconds || 0) > 0
+                ) {
+                    timerStartSent.add(sessionKey);
+                }
             }
         }
         updateDisplay();

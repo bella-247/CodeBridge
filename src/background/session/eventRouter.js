@@ -5,6 +5,9 @@ import {
     upsertSession,
     startSessionTimer,
     stopSessionTimer,
+    pauseSessionTimer,
+    resumeSessionTimer,
+    resetSessionTimer,
     recordSubmission,
     getAllSessions,
     getSessionByKey,
@@ -55,6 +58,26 @@ export async function handleSessionEvent(message) {
                 stoppedAt: event.stoppedAt || null,
             });
             shouldPrune = true;
+            break;
+        case "timer_pause":
+            updated = await pauseSessionTimer({
+                platform,
+                problemId,
+                pausedAt: event.pausedAt || null,
+            });
+            break;
+        case "timer_resume":
+            updated = await resumeSessionTimer({
+                platform,
+                problemId,
+                resumedAt: event.resumedAt || null,
+            });
+            break;
+        case "timer_reset":
+            updated = await resetSessionTimer({
+                platform,
+                problemId,
+            });
             break;
         case "submission":
             updated = await recordSubmission({

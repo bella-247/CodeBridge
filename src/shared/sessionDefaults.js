@@ -7,6 +7,7 @@ export const SESSION_DEFAULTS = Object.freeze({
     AUTO_START_DELAY_SECONDS: 10,
     SUPPORTED_PLATFORMS_ENABLED: ["codeforces", "leetcode"],
     SHOW_TIMER_OVERLAY: true,
+    TIMER_OVERLAY_SIZE: "medium", // small | medium | large
 });
 
 export const TIMER_START_MODES = Object.freeze({
