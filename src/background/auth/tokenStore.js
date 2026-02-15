@@ -1,7 +1,7 @@
 // auth/tokenStore.js — Token persistence logic
 // All token access goes through this module. Nobody else touches chrome.storage for tokens.
 
-import { log } from "../core/logger.js";
+import { log } from "../../core/logger.js";
 
 // In-memory cache for faster access
 let inMemoryToken = null;

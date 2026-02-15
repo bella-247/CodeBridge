@@ -2,7 +2,7 @@
 // With manifest-based content scripts, we intentionally avoid any fallback injection
 // to prevent duplicate bubbles and race conditions.
 
-import { log } from "../core/logger.js";
+import { log } from "../../core/logger.js";
 
 /**
  * Register tab injection listeners (No-op when manifest injection is enabled)

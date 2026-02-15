@@ -1,6 +1,6 @@
 /**
  * Simple template engine to replace placeholders with problem data.
- * Supports: [id], [title], [slug], [difficulty], [language], [ext], [platform], [description], [url], [tags], [folder], [time]
+ * Supports: [id], [title], [slug], [difficulty], [language], [ext], [platform], [description], [url], [tags], [folder], [time], [note]
  */
 export function fillTemplate(template, data) {
     if (!template) return "";
@@ -18,7 +18,8 @@ export function fillTemplate(template, data) {
         '[url]': data.url || '',
         '[tags]': Array.isArray(data.tags) ? data.tags.join(', ') : (data.tags || ''),
         '[folder]': data.folderName || '',
-        '[time]': data.solveTime || ''
+        '[time]': data.solveTime || '',
+        '[note]': data.note || ''
     };
 
     for (const [key, value] of Object.entries(replacements)) {

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Code Bridge - Help & Instructions</title>
+        <link rel="stylesheet" href="../styles.css" />
+        <link rel="stylesheet" href="help.css" />
+    </head>
+
+    <body class="dark-theme">
+        <div class="help-container animate-fade-in">
+            <header>
+                <div class="logo-container">
+                    <div class="logo-icon">
+                        <svg
+                            width="32"
+                            height="32"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                d="M7 8L3 12L7 16"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                            <path
+                                d="M17 8L21 12L17 16"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                            <path
+                                d="M14 4L10 20"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            />
+                        </svg>
+                    </div>
+                    <h1 style="color: white; margin: 0; font-size: 32px">
+                        Documentation
+                    </h1>
+                </div>
+                <p class="muted" style="font-size: 18px; margin-top: 8px">
+                    Master the ultimate competitive programming companion.
+                </p>
+            </header>
+
+            <section class="platform-card glass-card">
+                <div class="platform-header">
+                    <div class="platform-icon">🟢</div>
+                    <h3>Getting Started (GitHub Auth)</h3>
+                </div>
+                <ul class="step-list">
+                    <li class="step-item">
+                        <span class="step-num">1.</span> Click "Authenticate
+                        with GitHub" in the popup.
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">2.</span> A code will appear.
+                        Copy it and click the link to GitHub.
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">3.</span> Paste the code on
+                        GitHub's verification page.
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">4.</span> Once authorized, Code
+                        Bridge will reveal the workflow panel.
+                    </li>
+                </ul>
+            </section>
+
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>Customized Experience</h4>
+                    <p>
+                        Use the <strong>Customize</strong> link to define your
+                        own commit messages, file paths, and README formats
+                        using variables like <code>[id]</code> or
+                        <code>[difficulty]</code>.
+                    </p>
+                </div>
+                <div class="feature-item">
+                    <h4>Auto-Save Mode</h4>
+                    <p>
+                        Enable "Auto-save" in Settings to automatically push
+                        your solution whenever the platform signals an
+                        <code>Accepted</code> submission.
+                    </p>
+                </div>
+            </div>
+
+            <h2 style="color: white; margin: 20px 0 0 0">
+                Supported Platforms
+            </h2>
+
+            <section class="platform-card glass-card">
+                <div class="platform-header">
+                    <div class="platform-icon">❄️</div>
+                    <h3>LeetCode</h3>
+                </div>
+                <p class="muted">
+                    Uses deep API integration (GraphQL) for 100% accuracy.
+                </p>
+                <ul class="step-list">
+                    <li class="step-item">
+                        <span class="step-num">✓</span> Detects Title,
+                        Difficulty, and Tags via official LeetCode APIs.
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">✓</span> Extracts code directly
+                        from the Monaco Editor.
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">✓</span> Automatically captures
+                        problem descriptions for your README.
+                    </li>
+                </ul>
+            </section>
+
+            <section class="platform-card glass-card">
+                <div class="platform-header">
+                    <div class="platform-icon">📊</div>
+                    <h3>Codeforces</h3>
+                </div>
+                <p class="muted">
+                    Integrated DOM Scraping for contest and problemset pages.
+                </p>
+                <ul class="step-list">
+                    <li class="step-item">
+                        <span class="step-num">✓</span> Parses specialized
+                        problem IDs (e.g., <code>1850A</code>).
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">✓</span> Extracts difficulty
+                        scores (e.g., <code>*800</code>).
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">✓</span> Compatible with
+                        <strong>Ace Editor</strong> used in CF submission pages.
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">✓</span> Prompts you to open your
+                        accepted submission page to load the code.
+                    </li>
+                </ul>
+                <p class="muted" style="margin-top: 10px">
+                    When Detect runs on a problem page:
+                </p>
+                <ul class="step-list">
+                    <li class="step-item">
+                        <span class="step-num">1</span> Open an accepted
+                        submission from the submissions list or sidebar. Once
+                        the code loads, reopen the popup on that submission page
+                        to upload.
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">2</span> Optionally check
+                        "Don't ask again" to skip the prompt
+                        next time.
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">Tip</span> You can also click the
+                        accepted submission ID in the sidebar to open it manually.
+                    </li>
+                </ul>
+            </section>
+
+            <section class="platform-card glass-card">
+                <div class="platform-header">
+                    <div class="platform-icon">📦</div>
+                    <h3>HackerRank</h3>
+                </div>
+                <p class="muted">
+                    Supports Algorithms, Data Structures, and specialized
+                    Challenges.
+                </p>
+                <ul class="step-list">
+                    <li class="step-item">
+                        <span class="step-num">✓</span> Captures challenge names
+                        and difficulty labels.
+                    </li>
+                    <li class="step-item">
+                        <span class="step-num">✓</span> Intelligent code
+                        extraction from specialized HR editors.
+                    </li>
+                </ul>
+            </section>
+
+            <footer style="text-align: center; padding: 40px 0">
+                <p class="muted" style="font-size: 14px">
+                    Code Bridge — Engineering your portfolio, one problem at a
+                    time.
+                </p>
+            </footer>
+        </div>
+        <script src="help.js"></script>
+    </body>
+</html>

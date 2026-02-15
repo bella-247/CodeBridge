@@ -1,98 +1,181 @@
+// scrapers/leetcode.js — Code extraction from Monaco/CodeMirror editors
+// Background script executes this in the page's MAIN world to access editor instances
+
+import { log } from "../core/logger.js";
+
 /**
- * LeetCode Scraper Adapter
+ * The function that runs in the page's MAIN world to extract code
+ * This is injected via chrome.scripting.executeScript
  */
-export const LeetCodeScraper = {
-    platform: 'LeetCode',
+function extractCodeFromPage() {
+    try {
+        // 1) If monaco.editor.getEditors exists, prefer editable editor instances
+        if (window.monaco && window.monaco.editor) {
+            try {
+                const editors =
+                    (monaco.editor.getEditors && monaco.editor.getEditors()) || [];
 
-    // Check if the current URL belongs to this platform
-    matches(url) {
-        return url.includes('leetcode.com');
-    },
-
-    // Get the problem slug from URL
-    getSlug(url) {
-        try {
-            const parts = new URL(url).pathname.split("/").filter(Boolean);
-            const idx = parts.indexOf("problems");
-            if (idx !== -1 && parts.length > idx + 1) return parts[idx + 1];
-            return parts[parts.length - 1] || "";
-        } catch (e) {
-            return "";
-        }
-    },
-
-    // Fetch metadata via GraphQL or DOM
-    async fetchMetadata(slug) {
-        const url = "https://leetcode.com/graphql/";
-        const query = {
-            query: `
-                query getQuestionDetail($titleSlug: String!) {
-                    question(titleSlug: $titleSlug) {
-                        questionId
-                        title
-                        content
-                        difficulty
-                        topicTags {
-                            name
-                            slug
+                if (editors && editors.length) {
+                    // Pick editable editor with longest content
+                    let best = null;
+                    for (const ed of editors) {
+                        try {
+                            const val =
+                                (ed.getValue && ed.getValue()) ||
+                                (ed.getModel && ed.getModel().getValue && ed.getModel().getValue()) ||
+                                "";
+                            if (!best || (val && val.length > (best.valLength || 0))) {
+                                best = { ed, val, valLength: val ? val.length : 0 };
+                            }
+                        } catch (e) {
+                            /* ignore per-editor errors */
                         }
                     }
-                }
-            `,
-            variables: { titleSlug: slug },
-        };
 
-        try {
-            const res = await fetch(url, {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(query),
-            });
-            if (!res.ok) return null;
-            const json = await res.json();
-            return json?.data?.question || null;
-        } catch (err) {
-            console.error("LeetCode GraphQL fetch failed", err);
-            return null;
+                    if (best && best.val) {
+                        const model = (best.ed.getModel && best.ed.getModel()) || null;
+                        const lang =
+                            model && model.getLanguageIdentifier && model.getLanguageIdentifier().language
+                                ? model.getLanguageIdentifier().language
+                                : (model && model.getModeId ? model.getModeId() : null);
+                        return { code: best.val, languageId: lang || null };
+                    }
+                }
+            } catch (e) {
+                /* ignore editors API errors */
+            }
+
+            // 2) Fallback: use monaco models (choose longest)
+            try {
+                const models = (monaco.editor.getModels && monaco.editor.getModels()) || [];
+
+                if (models && models.length) {
+                    let bestModel = models[0];
+                    for (const m of models) {
+                        try {
+                            const aLen = (bestModel.getValue && bestModel.getValue().length) || 0;
+                            const bLen = (m.getValue && m.getValue().length) || 0;
+                            if (bLen > aLen) bestModel = m;
+                        } catch (e) {
+                            /* ignore */
+                        }
+                    }
+                    return {
+                        code: (bestModel.getValue && bestModel.getValue()) || "",
+                        languageId:
+                            (bestModel.getLanguageIdentifier && bestModel.getLanguageIdentifier().language) ||
+                            (bestModel.getModeId ? bestModel.getModeId() : null),
+                    };
+                }
+            } catch (e) {
+                /* ignore models errors */
+            }
         }
-    },
 
-    // Extract code from the page
-    async extractCode() {
-        return new Promise((resolve) => {
-            chrome.runtime.sendMessage({ action: "executeCodeExtraction" }, (response) => {
-                if (chrome.runtime.lastError || !response || !response.success) {
-                    resolve({ code: "", languageId: null });
-                } else {
-                    resolve(response.data);
-                }
-            });
-        });
-    },
+        // 3) window.editor fallback
+        if (window.editor && typeof window.editor.getValue === "function") {
+            return { code: window.editor.getValue(), languageId: null };
+        }
 
-    // Detect language from UI
-    getLanguage() {
+        // 4) CodeMirror fallback
+        const cmEl = document.querySelector(".CodeMirror");
+        if (cmEl && cmEl.CodeMirror && typeof cmEl.CodeMirror.getValue === "function") {
+            return {
+                code: cmEl.CodeMirror.getValue(),
+                languageId: cmEl.CodeMirror.getOption ? cmEl.CodeMirror.getOption("mode") : null,
+            };
+        }
+
+        // 5) Ace Editor fallback
         try {
-            const btn = document.querySelector('[data-cy="lang-select"] button span');
-            if (btn) return btn.innerText.trim();
-            const selected = document.querySelector(".ant-select-selection-item");
-            if (selected) return selected.innerText.trim();
-            return null;
+            const aceEl = document.querySelector(".ace_editor");
+            if (aceEl && window.ace) {
+                const editor = ace.edit(aceEl);
+                if (editor && typeof editor.getValue === "function") {
+                    return { code: editor.getValue(), languageId: null };
+                }
+            }
+        } catch (e) { }
+
+        // 6) Generic Textarea fallback (longest)
+        try {
+            const textareas = Array.from(document.querySelectorAll("textarea"));
+            if (textareas.length) {
+                let best = textareas[0];
+                for (const t of textareas) {
+                    if (t.value.length > best.value.length) best = t;
+                }
+                if (best.value.length > 50) { // arbitrary threshold to avoid search boxes
+                    return { code: best.value, languageId: null };
+                }
+            }
+        } catch (e) { }
+
+        // 7) Codeforces / Plain text pre fallback
+        try {
+            const pre = document.querySelector("#program-source-text") || document.querySelector("pre.prettyprint") || document.querySelector("pre.sh_cpp");
+            if (pre && pre.innerText.trim().length > 50) {
+                return { code: pre.innerText, languageId: null };
+            }
+        } catch (e) { }
+
+        // 8) DOM reconstruction fallback (monaco view-line)
+        try {
+            const viewLines = Array.from(document.querySelectorAll(".monaco-editor .view-line"));
+            if (viewLines && viewLines.length) {
+                const domCode = viewLines.map((l) => l.textContent || "").join("\n");
+                if (domCode && domCode.length) {
+                    return { code: domCode, languageId: null };
+                }
+            }
         } catch (e) {
-            return null;
+            /* ignore */
         }
-    },
 
-    // Format folder name
-    formatFolderName(id, title) {
-        const pad = id ? String(id).padStart(4, "0") : "0000";
-        const kebab = title
-            .toLowerCase()
-            .replace(/[`~!@#$%^&*()+=\[\]{};:'"\\|<>\/?]/g, "")
-            .replace(/\s+/g, "-")
-            .replace(/--+/g, "-")
-            .replace(/^-+|-+$/g, "");
-        return `${pad}-${kebab}`;
+        return { code: "", languageId: null };
+    } catch (e) {
+        return { code: "", languageId: null };
     }
-};
+}
+
+/**
+ * Execute code extraction in all frames of a tab and pick the best result.
+ * @param {number} tabId - The tab ID to extract from
+ * @param {Function} sendResponse - Callback to send response
+ */
+export function executeCodeExtraction(tabId, sendResponse) {
+    chrome.scripting.executeScript(
+        {
+            target: { tabId, allFrames: true },
+            world: "MAIN",
+            func: extractCodeFromPage,
+        },
+        (results) => {
+            if (chrome.runtime.lastError || !results || !results.length) {
+                sendResponse({
+                    success: false,
+                    message: chrome.runtime.lastError
+                        ? chrome.runtime.lastError.message
+                        : "No result from page",
+                });
+                return;
+            }
+
+            // Filter out failures and pick the result with the longest code
+            const validResults = results
+                .map(r => r.result)
+                .filter(res => res && res.code && res.code.trim().length > 0);
+
+            if (validResults.length === 0) {
+                sendResponse({ success: true, data: { code: "", languageId: null } });
+                return;
+            }
+
+            const best = validResults.reduce((prev, current) => {
+                return (current.code.length > prev.code.length) ? current : prev;
+            });
+
+            sendResponse({ success: true, data: best });
+        }
+    );
+}

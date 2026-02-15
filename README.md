@@ -1,89 +1,62 @@
-# Code Bridge
+# CodeBridge
 
-Code Bridge is a powerful Chrome extension that effortlessly bridges your coding progress by syncing solved problems from LeetCode, Codeforces, and HackerRank directly to your GitHub repository. It automatically organizes your solutions into well-structured folders with solution files and detailed READMEs.
+CodeBridge is a Manifest V3 Chrome extension that syncs solved problems from LeetCode, Codeforces, and HackerRank to a GitHub repository. It detects the problem, extracts your solution, generates a README, and uploads everything via the GitHub API.
 
-## Quick summary
-- Detects problem metadata on LeetCode (ID, title, URL, difficulty, tags, description).
-- Extracts your solution code from the in-page editor (Monaco, CodeMirror, textarea fallbacks).
-- Formats folder name as `XXXX-kebab-title` (zero-padded 4-digit ID).
-- Creates `solution.<ext>` and `README.md` inside the folder.
-- Uploads files to GitHub using the REST API (PUT /repos/{owner}/{repo}/contents/{path}).
-- Avoids overwriting existing files unless you enable "Allow overwrite".
-- Manifest v3 with service worker; source files are under `src/`.
+## Features
 
-## Files layout
-- manifest.json
-- src/
-  - content.js — content script injected into LeetCode pages
-  - popup.html — popup UI
-  - popup.js — popup logic
-  - background.js — service worker (handles GitHub API)
-- icons/icon.png (icon referenced by manifest)
+- Detects problem metadata (title, difficulty, tags, URL, ID/slug).
+- Extracts solution code from in-page editors or accepted submissions.
+- Supports folder or flat file layouts with customizable templates.
+- Uses GitHub device flow for authentication.
+- Works on LeetCode, Codeforces, and HackerRank.
 
-## Run locally & "Load unpacked" (clear steps)
+## Quick start
 
-1. Prepare workspace
-   - Ensure the repository folder contains: `manifest.json`, `src/` and `icons/icon.png`.
-   - If you don't have icons, add placeholder PNGs at `icons/icon.png` (recommended sizes 128×128, 48×48, 16×16).
+1. Create a GitHub OAuth App and copy the Client ID.
+2. Update src/background/constants.js with your Client ID.
+3. Load the extension from chrome://extensions (Developer mode -> Load unpacked).
+4. Open a supported problem page and click Detect.
+5. Save to GitHub.
 
-2. Open Chrome/Edge and go to the extensions page
-   - Address bar: chrome://extensions (or edge://extensions)
+## Documentation
 
-3. Enable Developer mode
-   - Toggle "Developer mode" ON (top-right).
+Full documentation is in docs/:
 
-4. Load the extension (unpacked)
-   - Click "Load unpacked".
-   - In the file picker select the extension root folder (the folder that contains `manifest.json`). Example on Windows:
-     - c:\Users\<you>\Desktop\CodeBridge
-   - Chrome will read `manifest.json` and register the extension.
+- docs/README.md
+- docs/overview.md
+- docs/architecture.md
+- docs/project-structure.md
+- docs/setup.md
+- docs/configuration.md
+- docs/development.md
+- docs/security-privacy.md
+- docs/troubleshooting.md
 
-5. Inspect the extension
-   - The extension will appear in the list. You can:
-     - Click "Details" → toggle "Allow in incognito" if you want incognito testing.
-     - Use "Inspect views" → Service worker (under the entry) to open DevTools for the background service worker.
-     - Use the extension toolbar icon to open the popup (or pin the extension).
+## Codeforces note
 
-6. Test on LeetCode
-   - Open a LeetCode problem page (URL example: https://leetcode.com/problems/two-sum/).
-   - Click the extension icon → popup opens.
-   - Click "Detect" — the popup will query the content script running on the active tab and populate metadata.
-   - Fill GitHub Owner and Repository, branch (must exist), and your Personal Access Token (PAT) with repo scope.
-   - Optionally add notes and check "Allow overwrite" to permit updates to existing files.
-   - Click "Save to GitHub". The popup will call the background service worker to upload files.
+Codeforces loads accepted code on the submission page. When Detect runs on a
+problem page, Code Bridge prompts you to open your last accepted submission.
+You can enable "Don't ask again (Auto Redirect)" to skip the prompt next time.
+You can also open the accepted submission manually (click the submission ID)
+and open the popup there.
 
-7. Reload / apply changes during development
-   - If you edit files under `src/` or `manifest.json`, go back to chrome://extensions and click "Reload" on the extension card.
-   - Alternatively, remove and "Load unpacked" again.
-   - After reloading, re-open the target LeetCode tab and click the popup Detect again.
+## Project structure
 
-## Debugging tips
-- Content script logs:
-  - Open the LeetCode page DevTools (F12) → Console to see logs or errors from `src/content.js`.
-- Background/service-worker logs:
-  - chrome://extensions → find extension → click "Service worker" → "Inspect" to open Service Worker DevTools console and network panel.
-- If popup cannot contact content script:
-  - Confirm the active tab is on a `https://leetcode.com/*` URL.
-  - Ensure `tabs` permission is present in `manifest.json`.
-  - Reload the LeetCode tab and click Detect again.
-- GitHub API errors:
-  - Check popup status message and service worker console for detailed messages (permission, token scope, non-existent branch).
+See docs/project-structure.md for the complete layout and module overview.
 
-## Security & token
-- Use a GitHub PAT with `repo` scope for private repositories or minimal scopes required for public repos.
-- You may optionally save the token in chrome.storage.local via the popup; that storage is tied to your Chrome profile.
-- Keep PATs private and avoid publishing them.
+## Development
 
-## Common problems & fixes
-- "No content script response": make sure you are on `leetcode.com` and the content script is loaded. Reload the tab and extension.
-- "Conflicts" error: either enable "Allow overwrite" in the popup or manually remove/rename existing files in the repo first.
-- Branch errors: ensure the branch you selected exists in the target repo.
+```bash
+npm install
+npm run build
+```
 
-## Next steps / improvements
-- Add an Options page for persistent defaults (owner/repo/branch).
-- Add OAuth flow to avoid storing PATs.
-- Improve editor detection heuristics if LeetCode updates their editor implementation.
+The build output is optional and used only for release packaging.
 
-## Contact / contribution
-- Modify code in `src/`, reload the extension in Developer mode to test changes.
-- Pull requests are welcome; keep extraction, UI, and GitHub utilities modular.
+## Security
+
+Tokens are stored in chrome.storage.local only when you choose to persist them. See docs/security-privacy.md for details.
+
+## License
+
+ISC

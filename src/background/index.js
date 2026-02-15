@@ -6,7 +6,7 @@
 import { restoreDeviceFlow, handleDeviceFlowAlarm } from "./auth/deviceFlow.js";
 import { registerMessageHandlers } from "./messaging/messageRouter.js";
 import { registerTabInjection } from "./leetcode/injector.js";
-import { log } from "./core/logger.js";
+import { log } from "../core/logger.js";
 
 // ─────────────────────────────────────────────────────────────
 // Initialization

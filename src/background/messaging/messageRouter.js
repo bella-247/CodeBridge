@@ -1,13 +1,13 @@
 // messaging/messageRouter.js — Central message handler
 // This replaces the giant onMessage block. Clean. Predictable. Testable.
 
-import { log, error } from "../core/logger.js";
-import { notify } from "../core/notifications.js";
+import { log, error } from "../../core/logger.js";
+import { notify } from "../../core/notifications.js";
 import { getToken, clearToken, maskToken } from "../auth/tokenStore.js";
 import { startDeviceFlow } from "../auth/deviceFlow.js";
 import { uploadFilesToRepo } from "../github/uploadService.js";
 import { ensureRepoExists, getFileShaIfExists } from "../github/repoService.js";
-import { executeCodeExtraction } from "../leetcode/extractor.js";
+import { executeCodeExtraction } from "../../scrapers/leetcode.js";
 import { generateUploadFiles } from "../../utils/fileStrategies.js";
 import { TemplateManager } from "../../utils/templateManager.js";
 import { fillTemplate } from "../../utils/templateEngine.js";
@@ -68,7 +68,8 @@ async function handlePrepareAndUpload(message) {
         repo,
         branch,
         fileOrg, // 'folder' or 'flat'
-        allowUpdate
+        allowUpdate,
+        commitMessage: customCommitMessage
     } = message;
 
     if (!problemData || !owner || !repo) {
@@ -100,7 +101,10 @@ async function handlePrepareAndUpload(message) {
         const files = generateUploadFiles(fileOrg, problemData, ext, templates, { includeProblemStatement });
 
         // Commit message
-        const commitMessage = TemplateManager.populateAll(problemData, templates, ext).commit;
+        let commitMessage = TemplateManager.populateAll(problemData, templates, ext).commit;
+        if (customCommitMessage && customCommitMessage.trim()) {
+            commitMessage = fillTemplate(customCommitMessage.trim(), problemData);
+        }
 
         const res = await uploadFilesToRepo({
             owner,

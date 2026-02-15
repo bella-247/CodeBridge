@@ -101,18 +101,43 @@
         return prefix ? `${prefix}-${name}` : name;
     }
 
-    function waitMs(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
+    function extractCodeforcesSubmissionFromDom() {
+        try {
+            const codeEl =
+                document.querySelector("#program-source-text") ||
+                document.querySelector("pre.prettyprint");
+            let code = codeEl
+                ? (codeEl.textContent || "").replace(/\u00a0/g, " ")
+                : "";
 
-    async function waitForSubmissionUrl(adapter, { timeoutMs = 2500, intervalMs = 250 } = {}) {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            const url = adapter.getSubmissionUrl();
-            if (url) return url;
-            await waitMs(intervalMs);
+            let language = "";
+            const infoRows = document.querySelectorAll(".datatable table tr");
+            for (const row of infoRows) {
+                const cells = row.getElementsByTagName("td");
+                if (cells.length > 1) {
+                    const label = cells[0].innerText
+                        .trim()
+                        .toLowerCase()
+                        .replace(/:$/, "");
+                    if (
+                        label === "lang" ||
+                        label === "language" ||
+                        label.includes("language") ||
+                        label.includes("язык")
+                    ) {
+                        language = cells[1].innerText.trim();
+                        break;
+                    }
+                }
+            }
+
+            return {
+                code,
+                language,
+            };
+        } catch (e) {
+            return { code: "", language: "" };
         }
-        return null;
     }
 
     async function loadAdapter() {
@@ -171,12 +196,13 @@
         });
     }
 
-    async function gatherProblemData() {
+    async function gatherProblemData(options = {}) {
         console.log("[CodeBridge] Gathering metadata...");
         const adapter = await loadAdapter();
         if (!adapter) throw new Error("No platform adapter found.");
 
         try {
+            const { skipSolutionFetch = false } = options || {};
             const data = await adapter.gather();
             if (!data)
                 throw new Error("Adapter failed to gather problem details.");
@@ -190,20 +216,33 @@
                 (location.pathname.includes("/submission/") ||
                     document.querySelector("#program-source-text"));
 
+            if (isCfSubmissionPage) {
+                if (!code.trim()) {
+                    const domRes = extractCodeforcesSubmissionFromDom();
+                    if (domRes.code && domRes.code.trim()) {
+                        code = domRes.code;
+                        codeSource = "submission";
+                    }
+                    if (domRes.language) data.language = domRes.language;
+                }
+                data.submissionUrl = location.href;
+                data.isSubmissionPage = true;
+            }
+
             const shouldFetch =
                 adapter.getSubmissionUrl &&
-                (!code.trim() || !isCfSubmissionPage);
+                !skipSolutionFetch &&
+                !isCfSubmissionPage &&
+                !code.trim() &&
+                !isCodeforces;
 
             if (shouldFetch) {
-                let subUrl = adapter.getSubmissionUrl();
-                if (!subUrl && isCodeforces) {
-                    subUrl = await waitForSubmissionUrl(adapter);
-                }
+                const subUrl = adapter.getSubmissionUrl();
                 if (subUrl) {
                     console.log("[CodeBridge] Fetching submission:", subUrl);
                     let res = null;
 
-                    if (isCodeforces && adapter.fetchSolution) {
+                    if (adapter.fetchSolution) {
                         res = await adapter.fetchSolution(subUrl);
                     } else {
                         res = await new Promise((resolve) => {
@@ -223,14 +262,12 @@
                             "Submission parsed but code was empty.";
                     } else if (res && !res.success && res.message) {
                         data.codeError = res.message;
+                        if (res.kind) data.codeErrorKind = res.kind;
                     } else if (!res) {
                         data.codeError =
                             "Submission fetch did not return a response.";
                     }
                     data.submissionUrl = subUrl;
-                } else if (isCodeforces) {
-                    data.codeError =
-                        "No accepted submission link found in the page sidebar (after waiting).";
                 }
             }
 
@@ -260,6 +297,7 @@
                 url: location.href,
                 folderName: folderName,
                 codeSource: codeSource || (code && code.trim() ? "editor" : ""),
+                isSubmissionPage: !!data.isSubmissionPage,
             };
         } catch (err) {
             console.error("[CodeBridge] gatherProblemData failed", err);
@@ -278,7 +316,9 @@
             case "getProblemData":
                 (async () => {
                     try {
-                        const data = await gatherProblemData();
+                        const data = await gatherProblemData(
+                            message.options || {},
+                        );
                         sendResponse({ success: true, data });
                     } catch (err) {
                         sendResponse({
@@ -327,6 +367,180 @@
         } catch (ex) {}
     }
 
+    function showBubbleError(message) {
+        try {
+            const bubble = document.getElementById("cb-bubble");
+            if (!bubble) {
+                minimalToast(message, false);
+                return;
+            }
+
+            let tip = document.getElementById("cb-bubble-error");
+            if (!tip) {
+                tip = document.createElement("div");
+                tip.id = "cb-bubble-error";
+                document.body.appendChild(tip);
+            }
+
+            tip.textContent = message;
+            const rect = bubble.getBoundingClientRect();
+            Object.assign(tip.style, {
+                position: "fixed",
+                left: `${rect.left + rect.width / 2}px`,
+                top: `${Math.max(8, rect.top - 8)}px`,
+                transform: "translate(-50%, -100%)",
+                background: "rgba(239, 68, 68, 0.95)",
+                color: "#fff",
+                padding: "6px 10px",
+                borderRadius: "8px",
+                zIndex: "2147483652",
+                fontSize: "12px",
+                fontFamily: "Inter, sans-serif",
+                boxShadow: "0 6px 16px rgba(0,0,0,0.3)",
+                maxWidth: "280px",
+                textAlign: "center",
+                display: "block",
+            });
+
+            if (tip._hideTimeout) clearTimeout(tip._hideTimeout);
+            tip._hideTimeout = setTimeout(() => {
+                tip.style.display = "none";
+            }, 4000);
+        } catch (e) {
+            minimalToast(message, false);
+        }
+    }
+
+    function promptSolveTime() {
+        return new Promise((resolve) => {
+            if (document.getElementById("cb-solve-time-modal")) {
+                resolve(null);
+                return;
+            }
+
+            const overlay = document.createElement("div");
+            overlay.id = "cb-solve-time-modal";
+            Object.assign(overlay.style, {
+                position: "fixed",
+                inset: "0",
+                background: "rgba(15, 23, 42, 0.55)",
+                zIndex: "2147483653",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "16px",
+            });
+
+            const card = document.createElement("div");
+            Object.assign(card.style, {
+                width: "100%",
+                maxWidth: "360px",
+                background: "#0f172a",
+                color: "#e2e8f0",
+                borderRadius: "14px",
+                padding: "16px",
+                boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
+                border: "1px solid rgba(148,163,184,0.25)",
+                fontFamily: "Inter, sans-serif",
+            });
+
+            const title = document.createElement("div");
+            title.textContent = "Time to solve";
+            Object.assign(title.style, {
+                fontSize: "14px",
+                fontWeight: "600",
+                marginBottom: "8px",
+            });
+
+            const input = document.createElement("input");
+            input.type = "text";
+            input.placeholder = "e.g. 45 min";
+            Object.assign(input.style, {
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: "10px",
+                border: "1px solid rgba(148,163,184,0.35)",
+                background: "rgba(15,23,42,0.8)",
+                color: "#e2e8f0",
+                outline: "none",
+                fontSize: "13px",
+                marginBottom: "10px",
+            });
+
+            const hint = document.createElement("div");
+            hint.textContent = "Add your solve time to include it in the upload.";
+            Object.assign(hint.style, {
+                fontSize: "11px",
+                color: "#94a3b8",
+                marginBottom: "12px",
+            });
+
+            const actions = document.createElement("div");
+            Object.assign(actions.style, {
+                display: "flex",
+                gap: "8px",
+                justifyContent: "flex-end",
+            });
+
+            const cancelBtn = document.createElement("button");
+            cancelBtn.type = "button";
+            cancelBtn.textContent = "Cancel";
+            Object.assign(cancelBtn.style, {
+                background: "transparent",
+                color: "#94a3b8",
+                border: "1px solid rgba(148,163,184,0.35)",
+                padding: "8px 12px",
+                borderRadius: "10px",
+                cursor: "pointer",
+            });
+
+            const okBtn = document.createElement("button");
+            okBtn.type = "button";
+            okBtn.textContent = "Continue";
+            Object.assign(okBtn.style, {
+                background: "#10b981",
+                color: "#fff",
+                border: "none",
+                padding: "8px 12px",
+                borderRadius: "10px",
+                cursor: "pointer",
+            });
+
+            function cleanup(result) {
+                try {
+                    overlay.remove();
+                } catch (e) {}
+                resolve(result);
+            }
+
+            cancelBtn.addEventListener("click", () => cleanup(null));
+            okBtn.addEventListener("click", () => cleanup((input.value || "").trim()));
+            overlay.addEventListener("click", (e) => {
+                if (e.target === overlay) cleanup(null);
+            });
+            input.addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    cleanup((input.value || "").trim());
+                } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cleanup(null);
+                }
+            });
+
+            actions.appendChild(cancelBtn);
+            actions.appendChild(okBtn);
+            card.appendChild(title);
+            card.appendChild(input);
+            card.appendChild(hint);
+            card.appendChild(actions);
+            overlay.appendChild(card);
+            document.body.appendChild(overlay);
+
+            setTimeout(() => input.focus(), 0);
+        });
+    }
+
     function ensureBubble() {
         if (document.getElementById("cb-bubble")) return;
         try {
@@ -366,9 +580,22 @@
                 try {
                     bubble.dataset.processing = "1";
                     bubble.style.opacity = "0.7";
+                    const solveTimeRaw = await promptSolveTime();
+                    if (!solveTimeRaw) {
+                        showBubbleError(
+                            "Please enter time to solve before uploading.",
+                        );
+                        return;
+                    }
+
+                    const solveTime = /^\d+$/.test(solveTimeRaw)
+                        ? `${solveTimeRaw} min`
+                        : solveTimeRaw;
+
                     minimalToast("Syncing solution...", true);
                     const data = await gatherProblemData();
                     if (!data || !data.code) throw new Error("No code found.");
+                    data.solveTime = solveTime;
                     await performAutoSave(data, { silent: false });
                 } catch (err) {
                     minimalToast(err.message || "Sync failed", false);
