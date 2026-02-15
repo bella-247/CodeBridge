@@ -7,19 +7,37 @@ let _sessionsCache = null;
 function storageGet(keys) {
     return new Promise((resolve) => {
         try {
-            chrome.storage.local.get(keys, (items) => resolve(items || {}));
+            chrome.storage.local.get(keys, (items) => {
+                const err = chrome.runtime.lastError;
+                if (err) {
+                    console.error("storageGet failed:", err);
+                    resolve({});
+                    return;
+                }
+                resolve(items || {});
+            });
         } catch (e) {
+            console.error("storageGet exception:", e);
             resolve({});
         }
     });
 }
 
 function storageSet(values) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         try {
-            chrome.storage.local.set(values, () => resolve());
+            chrome.storage.local.set(values, () => {
+                const err = chrome.runtime.lastError;
+                if (err) {
+                    console.error("storageSet failed:", err);
+                    reject(err);
+                    return;
+                }
+                resolve();
+            });
         } catch (e) {
-            resolve();
+            console.error("storageSet exception:", e);
+            reject(e);
         }
     });
 }

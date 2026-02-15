@@ -25,6 +25,7 @@ export function createAdapter(definition) {
         getSubmissionData: () => null,
         observeSubmissionData: () => null,
         getEditorSelectors: () => [],
+        isSuccessfulSubmission: () => false,
         isEditorTarget: (el) => {
             const selectors = definition.getEditorSelectors
                 ? definition.getEditorSelectors()

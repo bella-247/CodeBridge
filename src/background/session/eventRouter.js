@@ -87,8 +87,15 @@ export async function handleSessionEvent(message) {
                 language: event.language || null,
                 submissionId: event.submissionId || null,
                 submittedAt: event.submittedAt || null,
+                isSuccess:
+                    typeof event.isSuccess === "boolean" ? event.isSuccess : null,
+                autoStop:
+                    typeof event.autoStop === "boolean" ? event.autoStop : true,
             });
-            shouldPrune = isAcceptedVerdict(event.verdict);
+            shouldPrune =
+                typeof event.isSuccess === "boolean"
+                    ? event.isSuccess
+                    : isAcceptedVerdict(event.verdict);
             break;
         case "page_view":
         default:
@@ -109,7 +116,10 @@ export async function handleGetSessionSettings() {
 }
 
 export async function handleSetSessionSettings(message) {
-    const settings = await setSessionSettings(message && message.settings ? message.settings : {});
+    if (!message || !message.settings) {
+        return { success: false, error: "Missing session settings" };
+    }
+    const settings = await setSessionSettings(message.settings);
     return { success: true, settings };
 }
 

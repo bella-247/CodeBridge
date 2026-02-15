@@ -1,28 +1,34 @@
 // content/sessionTracker.js — Session tracking entry point
 
 import { SESSION_DEFAULTS } from "../shared/sessionDefaults.js";
+import { SUPPORTED_PLATFORMS } from "../utils/constants.js";
 
-const ADAPTERS = {
-    codeforces: {
-        module: "src/content/adapters/codeforcesAdapter.js",
-        exportName: "CodeforcesSessionAdapter",
-    },
-    leetcode: {
-        module: "src/content/adapters/leetcodeAdapter.js",
-        exportName: "LeetCodeSessionAdapter",
-    },
-};
+const ADAPTERS = {};
+SUPPORTED_PLATFORMS.forEach(p => {
+    ADAPTERS[p.key] = {
+        module: p.adapterModule,
+        exportName: p.adapterExport
+    };
+});
 
 let settings = { ...SESSION_DEFAULTS };
 const adapterCache = new Map();
 const timerStartSent = new Set();
 const lastSubmissionKeys = new Map();
+let lastSubmissionPrune = 0;
+const lastActivityByKey = new Map();
+let inactivityIntervalId = null;
+
+const SUBMISSION_DEDUP_MS = 5000;
+const SUBMISSION_TTL_MS = 60 * 60 * 1000;
+const INACTIVITY_CHECK_INTERVAL_MS = 30000;
 
 let activeKey = null;
 let cleanupFns = [];
 let lastUrl = null;
 let overlayDismissed = false;
 let overlayState = null;
+let lastSessionInfo = null;
 
 function nowSeconds() {
     return Math.floor(Date.now() / 1000);
@@ -62,7 +68,29 @@ async function refreshSettings() {
     if (!allowedSizes.includes(merged.TIMER_OVERLAY_SIZE)) {
         merged.TIMER_OVERLAY_SIZE = SESSION_DEFAULTS.TIMER_OVERLAY_SIZE;
     }
+    if (typeof merged.AUTO_STOP_ON_ACCEPTED !== "boolean") {
+        merged.AUTO_STOP_ON_ACCEPTED = SESSION_DEFAULTS.AUTO_STOP_ON_ACCEPTED;
+    }
+    if (typeof merged.AUTO_STOP_ON_PROBLEM_SWITCH !== "boolean") {
+        merged.AUTO_STOP_ON_PROBLEM_SWITCH = SESSION_DEFAULTS.AUTO_STOP_ON_PROBLEM_SWITCH;
+    }
+    if (typeof merged.ALLOW_MANUAL_STOP !== "boolean") {
+        merged.ALLOW_MANUAL_STOP = SESSION_DEFAULTS.ALLOW_MANUAL_STOP;
+    }
+    if (!Number.isFinite(merged.INACTIVITY_TIMEOUT_MINUTES)) {
+        merged.INACTIVITY_TIMEOUT_MINUTES = SESSION_DEFAULTS.INACTIVITY_TIMEOUT_MINUTES;
+    }
     settings = merged;
+
+    if (!settings.SHOW_TIMER_OVERLAY) {
+        overlayDismissed = true;
+        if (overlayState && overlayState.el) {
+            overlayState.el.remove();
+        }
+        overlayState = null;
+    } else {
+        overlayDismissed = false;
+    }
     return settings;
 }
 
@@ -72,9 +100,8 @@ function isPlatformEnabled(platformKey) {
 
 function detectPlatformKey() {
     const host = location.hostname;
-    if (host.includes("codeforces.com")) return "codeforces";
-    if (host.includes("leetcode.com")) return "leetcode";
-    return null;
+    const platform = SUPPORTED_PLATFORMS.find(p => host.includes(p.hostPattern));
+    return platform ? platform.key : null;
 }
 
 async function loadAdapter(platformKey) {
@@ -117,6 +144,72 @@ function clearCleanup() {
 
 function setActiveKey(key) {
     activeKey = key;
+    if (key) {
+        lastActivityByKey.set(key, Date.now());
+    }
+}
+
+function isAcceptedVerdict(verdict) {
+    if (!verdict) return false;
+    const v = String(verdict).trim().toLowerCase();
+    return v === "accepted" || v === "ok" || v === "ac" || v === "passed";
+}
+
+function markActivity(sessionKey) {
+    if (!sessionKey) return;
+    lastActivityByKey.set(sessionKey, Date.now());
+}
+
+async function stopSessionIfActive(platformKey, problemId, reason) {
+    const session = await fetchSession(platformKey, problemId);
+    if (!session || session.endTime) return false;
+    const hasActiveTime =
+        !!session.startTime ||
+        !!session.isPaused ||
+        (Number.isFinite(session.elapsedSeconds) && session.elapsedSeconds > 0);
+    if (!hasActiveTime) return false;
+
+    sendSessionEvent("timer_stop", {
+        platform: platformKey,
+        problemId,
+        stoppedAt: nowSeconds(),
+        reason,
+    });
+    return true;
+}
+
+function startInactivityWatcher(sessionKey, basePayload) {
+    if (inactivityIntervalId) {
+        clearInterval(inactivityIntervalId);
+        inactivityIntervalId = null;
+    }
+
+    const timeoutMinutes = Number(settings.INACTIVITY_TIMEOUT_MINUTES);
+    if (!Number.isFinite(timeoutMinutes) || timeoutMinutes <= 0) return;
+
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+    inactivityIntervalId = setInterval(async () => {
+        if (activeKey !== sessionKey) return;
+        const last = lastActivityByKey.get(sessionKey);
+        if (!last) return;
+        if (Date.now() - last < timeoutMs) return;
+
+        const stopped = await stopSessionIfActive(
+            basePayload.platform,
+            basePayload.problemId,
+            "timeout",
+        );
+        if (stopped) {
+            markActivity(sessionKey);
+        }
+    }, INACTIVITY_CHECK_INTERVAL_MS);
+
+    cleanupFns.push(() => {
+        if (inactivityIntervalId) {
+            clearInterval(inactivityIntervalId);
+            inactivityIntervalId = null;
+        }
+    });
 }
 
 async function getOverlayPosition(platformKey) {
@@ -226,7 +319,8 @@ function ensureTimerStyles() {
             font-size: 19px;
             font-weight: 700;
             letter-spacing: 0.08em;
-            margin-top: 6px;
+            margin-top: 8px;
+            margin-bottom: 8px;
             line-height: 1;
             text-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
         }
@@ -340,12 +434,21 @@ async function ensureTimerOverlay(platformKey) {
         resetBtn.innerHTML =
             '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.34-5.66L4 4v6h6L7.86 7.86A6 6 0 1 1 6 12z"/></svg>';
 
+        const stopBtn = document.createElement("button");
+        stopBtn.type = "button";
+        stopBtn.className = "cb-timer-btn cb-timer-stop";
+        stopBtn.title = "End";
+        stopBtn.setAttribute("aria-label", "End session");
+        stopBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+
         overlay.appendChild(header);
         overlay.appendChild(time);
         overlay.appendChild(controls);
 
         controls.appendChild(playBtn);
         controls.appendChild(pauseBtn);
+        controls.appendChild(stopBtn);
         controls.appendChild(resetBtn);
 
         document.body.appendChild(overlay);
@@ -356,6 +459,7 @@ async function ensureTimerOverlay(platformKey) {
             indicatorEl: indicator,
             playBtn,
             pauseBtn,
+            stopBtn,
             resetBtn,
             headerEl: header,
             platformKey,
@@ -496,6 +600,7 @@ function trackDelayedAuto(basePayload, sessionKey) {
             if (timerStartSent.has(activeKey)) return;
             if (activeKey !== sessionKey) return;
 
+            markActivity(sessionKey);
             timerStartSent.add(activeKey);
             sendSessionEvent("timer_start", {
                 ...basePayload,
@@ -528,6 +633,7 @@ function trackTypingStart(adapter, basePayload, sessionKey) {
         if (activeKey !== sessionKey) return;
 
         if (adapter.isEditorTarget && adapter.isEditorTarget(event.target)) {
+            markActivity(sessionKey);
             timerStartSent.add(activeKey);
             sendSessionEvent("timer_start", {
                 ...basePayload,
@@ -548,12 +654,46 @@ function shouldSendSubmission(sessionKey, data) {
         data.language || "",
     ].join("|");
     const now = Date.now();
+    if (now - lastSubmissionPrune > 60000) {
+        for (const [key, value] of lastSubmissionKeys.entries()) {
+            if (!value || now - value.ts > SUBMISSION_TTL_MS) {
+                lastSubmissionKeys.delete(key);
+            }
+        }
+        lastSubmissionPrune = now;
+    }
     const last = lastSubmissionKeys.get(sessionKey);
-    if (last && last.fingerprint === fingerprint && now - last.ts < 5000) {
+    if (last && last.fingerprint === fingerprint && now - last.ts < SUBMISSION_DEDUP_MS) {
         return false;
     }
     lastSubmissionKeys.set(sessionKey, { fingerprint, ts: now });
     return true;
+}
+
+function isSuccessfulSubmission(adapter, data) {
+    if (adapter && typeof adapter.isSuccessfulSubmission === "function") {
+        return adapter.isSuccessfulSubmission(data);
+    }
+    return isAcceptedVerdict(data && data.verdict ? data.verdict : null);
+}
+
+function handleSubmission(adapter, sessionKey, basePayload, submission, submissionId) {
+    if (!submission) return;
+    if (!shouldSendSubmission(sessionKey, { ...submission, submissionId })) return;
+
+    markActivity(sessionKey);
+
+    const isSuccess = isSuccessfulSubmission(adapter, submission);
+
+    sendSessionEvent("submission", {
+        ...basePayload,
+        submissionId,
+        verdict: submission.verdict || null,
+        language: submission.language || null,
+        isSuccess,
+        autoStop: !!settings.AUTO_STOP_ON_ACCEPTED,
+        submittedAt: nowSeconds(),
+    });
 }
 
 async function setupTimerOverlay({
@@ -613,6 +753,10 @@ async function setupTimerOverlay({
 
         overlay.playBtn.disabled = !canPlay;
         overlay.pauseBtn.disabled = !canPause;
+        if (overlay.stopBtn) {
+            overlay.stopBtn.disabled =
+                !settings.ALLOW_MANUAL_STOP || ended || !hasAnyTime;
+        }
         overlay.resetBtn.disabled = !hasAnyTime;
 
         let playTitle = "Start";
@@ -644,6 +788,7 @@ async function setupTimerOverlay({
             return;
         }
 
+        markActivity(sessionKey);
         timerStartSent.add(sessionKey);
         sendSessionEvent("timer_start", {
             ...basePayload,
@@ -666,6 +811,7 @@ async function setupTimerOverlay({
     overlay.pauseBtn.onclick = () => {
         if (!snapshot || !snapshot.startTime || snapshot.isPaused) return;
         const now = nowSeconds();
+        markActivity(sessionKey);
         sendSessionEvent("timer_pause", {
             ...basePayload,
             pausedAt: now,
@@ -685,6 +831,7 @@ async function setupTimerOverlay({
 
     overlay.resetBtn.onclick = () => {
         const now = nowSeconds();
+        markActivity(sessionKey);
         sendSessionEvent("timer_reset", {
             ...basePayload,
             resetAt: now,
@@ -699,6 +846,30 @@ async function setupTimerOverlay({
         };
         updateDisplay();
     };
+
+    if (overlay.stopBtn) {
+        overlay.stopBtn.onclick = () => {
+            if (!settings.ALLOW_MANUAL_STOP) return;
+            const now = nowSeconds();
+            const elapsed = getElapsedSecondsFromSession(snapshot);
+            markActivity(sessionKey);
+            sendSessionEvent("timer_stop", {
+                platform: basePayload.platform,
+                problemId: basePayload.problemId,
+                stoppedAt: now,
+                reason: "manual",
+            });
+            snapshot = {
+                ...(snapshot || {}),
+                startTime: null,
+                endTime: now,
+                elapsedSeconds: elapsed,
+                isPaused: false,
+                pausedAt: null,
+            };
+            updateDisplay();
+        };
+    }
 
     updateDisplay();
 
@@ -744,7 +915,20 @@ async function handlePage() {
     const difficulty = adapter.getDifficulty ? adapter.getDifficulty(pageType) : null;
     const sessionKey = `${platformKey}:${problemId}`;
 
+    if (
+        settings.AUTO_STOP_ON_PROBLEM_SWITCH &&
+        lastSessionInfo &&
+        lastSessionInfo.sessionKey !== sessionKey
+    ) {
+        await stopSessionIfActive(
+            lastSessionInfo.platformKey,
+            lastSessionInfo.problemId,
+            "problem_switch",
+        );
+    }
+
     setActiveKey(sessionKey);
+    lastSessionInfo = { platformKey, problemId, sessionKey };
 
     const basePayload = {
         platform: platformKey,
@@ -753,6 +937,22 @@ async function handlePage() {
     };
 
     sendSessionEvent("page_view", basePayload);
+
+    const activityHandler = () => markActivity(sessionKey);
+    const onVisibility = () => {
+        if (document.visibilityState === "visible") {
+            markActivity(sessionKey);
+        }
+    };
+    document.addEventListener("keydown", activityHandler, true);
+    document.addEventListener("mousedown", activityHandler, true);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    cleanupFns.push(() => {
+        document.removeEventListener("keydown", activityHandler, true);
+        document.removeEventListener("mousedown", activityHandler, true);
+        document.removeEventListener("visibilitychange", onVisibility);
+    });
 
     if (settings.TIMER_START_MODE === "DELAYED_AUTO" && pageType === "problem") {
         trackDelayedAuto(basePayload, sessionKey);
@@ -771,27 +971,26 @@ async function handlePage() {
         }).catch(() => {});
     }
 
-    const submissionId = adapter.getSubmissionId ? adapter.getSubmissionId() : null;
+    startInactivityWatcher(sessionKey, basePayload);
+
+    const getSubmissionId = adapter.getSubmissionId
+        ? adapter.getSubmissionId.bind(adapter)
+        : null;
+    const submissionId = getSubmissionId ? getSubmissionId() : null;
     const submission = adapter.getSubmissionData ? adapter.getSubmissionData() : null;
-    if (submission && shouldSendSubmission(sessionKey, { ...submission, submissionId })) {
-        sendSessionEvent("submission", {
-            ...basePayload,
-            submissionId,
-            verdict: submission.verdict || null,
-            language: submission.language || null,
-            submittedAt: nowSeconds(),
-        });
+    if (submission) {
+        handleSubmission(adapter, sessionKey, basePayload, submission, submissionId);
     } else if (adapter.observeSubmissionData) {
         const stop = adapter.observeSubmissionData((data) => {
             if (!data) return;
-            if (!shouldSendSubmission(sessionKey, { ...data, submissionId })) return;
-            sendSessionEvent("submission", {
-                ...basePayload,
-                submissionId,
-                verdict: data.verdict || null,
-                language: data.language || null,
-                submittedAt: nowSeconds(),
-            });
+            const currentSubmissionId = getSubmissionId ? getSubmissionId() : null;
+            handleSubmission(
+                adapter,
+                sessionKey,
+                basePayload,
+                data,
+                currentSubmissionId,
+            );
         });
         if (typeof stop === "function") cleanupFns.push(stop);
     }

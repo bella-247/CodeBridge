@@ -112,7 +112,8 @@ function extractSubmissionData() {
 
 export const LeetCodeSessionAdapter = createAdapter({
     platformKey: "leetcode",
-    matchesHostname: (hostname) => hostname.includes("leetcode.com"),
+    matchesHostname: (hostname) =>
+        hostname === "leetcode.com" || hostname.endsWith(".leetcode.com"),
     detectPageType: () => {
         const path = location.pathname;
         if (/\/problems\//i.test(path)) return "problem";
@@ -136,6 +137,11 @@ export const LeetCodeSessionAdapter = createAdapter({
             subtree: true,
         });
         return () => observer.disconnect();
+    },
+    isSuccessfulSubmission: (data) => {
+        if (!data || !data.verdict) return false;
+        const verdict = String(data.verdict).trim().toLowerCase();
+        return verdict === "accepted" || verdict === "ac" || verdict === "passed";
     },
     getEditorSelectors: () => [
         ".monaco-editor textarea",

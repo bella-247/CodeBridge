@@ -181,21 +181,8 @@
                     <div class="form-grid" style="margin-top: 12px">
                         <div class="input-group">
                             <label>Platforms Enabled</label>
-                            <div class="checkbox-group">
-                                <label class="checkbox-row">
-                                    <input
-                                        id="platformCodeforces"
-                                        type="checkbox"
-                                    />
-                                    Codeforces
-                                </label>
-                                <label class="checkbox-row">
-                                    <input
-                                        id="platformLeetCode"
-                                        type="checkbox"
-                                    />
-                                    LeetCode
-                                </label>
+                            <div id="platformsContainer" class="checkbox-group">
+                                <!-- Dynamically populated -->
                             </div>
                         </div>
                         <div class="input-group">
@@ -223,6 +210,71 @@
                                 <option value="medium">Medium</option>
                                 <option value="large">Large</option>
                             </select>
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label>Auto Stop on Accepted</label>
+                            <div class="checkbox-inline">
+                                <input id="autoStopOnAccepted" type="checkbox" />
+                                <label
+                                    for="autoStopOnAccepted"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Stop when accepted
+                                </label>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Auto Stop on Problem Switch</label>
+                            <div class="checkbox-inline">
+                                <input
+                                    id="autoStopOnProblemSwitch"
+                                    type="checkbox"
+                                />
+                                <label
+                                    for="autoStopOnProblemSwitch"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Stop previous session
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label>Inactivity Timeout (min)</label>
+                            <input
+                                id="inactivityTimeout"
+                                type="number"
+                                min="0"
+                                step="1"
+                                placeholder="30"
+                            />
+                        </div>
+                        <div class="input-group">
+                            <label>Allow Manual Stop</label>
+                            <div class="checkbox-inline">
+                                <input id="allowManualStop" type="checkbox" />
+                                <label
+                                    for="allowManualStop"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Show end button
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -310,6 +362,6 @@
                 </div>
             </main>
         </div>
-        <script src="options.js"></script>
+        <script type="module" src="options.js"></script>
     </body>
 </html>

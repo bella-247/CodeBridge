@@ -2,17 +2,10 @@
  * options.js - Configuration management for CodeBridge
  */
 
-const $ = (id) => document.getElementById(id);
+import { SUPPORTED_PLATFORMS } from "../../utils/constants.js";
+import { SESSION_DEFAULTS } from "../../shared/sessionDefaults.js";
 
-const SESSION_DEFAULTS = {
-    SESSION_PRUNE_DAYS: 90,
-    MAX_SESSIONS_STORED: 1000,
-    TIMER_START_MODE: "DELAYED_AUTO",
-    AUTO_START_DELAY_SECONDS: 10,
-    SUPPORTED_PLATFORMS_ENABLED: ["codeforces", "leetcode"],
-    SHOW_TIMER_OVERLAY: true,
-    TIMER_OVERLAY_SIZE: "medium",
-};
+const $ = (id) => document.getElementById(id);
 
 function loadOptions() {
     chrome.storage.local.get(
@@ -34,6 +27,10 @@ function loadOptions() {
             "SUPPORTED_PLATFORMS_ENABLED",
             "SHOW_TIMER_OVERLAY",
             "TIMER_OVERLAY_SIZE",
+            "AUTO_STOP_ON_ACCEPTED",
+            "AUTO_STOP_ON_PROBLEM_SWITCH",
+            "INACTIVITY_TIMEOUT_MINUTES",
+            "ALLOW_MANUAL_STOP",
         ],
         (items) => {
             if (items) {
@@ -104,6 +101,22 @@ function loadOptions() {
                     typeof items.TIMER_OVERLAY_SIZE === "string"
                         ? items.TIMER_OVERLAY_SIZE
                         : SESSION_DEFAULTS.TIMER_OVERLAY_SIZE;
+                const autoStopOnAccepted =
+                    typeof items.AUTO_STOP_ON_ACCEPTED === "boolean"
+                        ? items.AUTO_STOP_ON_ACCEPTED
+                        : SESSION_DEFAULTS.AUTO_STOP_ON_ACCEPTED;
+                const autoStopOnProblemSwitch =
+                    typeof items.AUTO_STOP_ON_PROBLEM_SWITCH === "boolean"
+                        ? items.AUTO_STOP_ON_PROBLEM_SWITCH
+                        : SESSION_DEFAULTS.AUTO_STOP_ON_PROBLEM_SWITCH;
+                const allowManualStop =
+                    typeof items.ALLOW_MANUAL_STOP === "boolean"
+                        ? items.ALLOW_MANUAL_STOP
+                        : SESSION_DEFAULTS.ALLOW_MANUAL_STOP;
+                const inactivityTimeout =
+                    typeof items.INACTIVITY_TIMEOUT_MINUTES === "number"
+                        ? items.INACTIVITY_TIMEOUT_MINUTES
+                        : SESSION_DEFAULTS.INACTIVITY_TIMEOUT_MINUTES;
 
                 if ($("sessionPruneDays"))
                     $("sessionPruneDays").value = String(pruneDays);
@@ -113,16 +126,38 @@ function loadOptions() {
                     $("timerStartMode").value = timerMode;
                 if ($("autoStartDelay"))
                     $("autoStartDelay").value = String(autoDelay);
-                if ($("platformCodeforces"))
-                    $("platformCodeforces").checked =
-                        platforms.includes("codeforces");
-                if ($("platformLeetCode"))
-                    $("platformLeetCode").checked =
-                        platforms.includes("leetcode");
+
+                // Dynamic Platform List
+                const container = $("platformsContainer");
+                if (container) {
+                    container.innerHTML = "";
+                    SUPPORTED_PLATFORMS.forEach((platform) => {
+                        const label = document.createElement("label");
+                        label.className = "checkbox-row";
+
+                        const input = document.createElement("input");
+                        input.type = "checkbox";
+                        input.id = `platform_${platform.key}`;
+                        input.checked = platforms.includes(platform.key);
+
+                        label.appendChild(input);
+                        label.appendChild(document.createTextNode(" " + platform.name));
+                        container.appendChild(label);
+                    });
+                }
+
                 if ($("showTimerOverlay"))
                     $("showTimerOverlay").checked = !!showTimerOverlay;
                 if ($("timerOverlaySize"))
                     $("timerOverlaySize").value = timerOverlaySize;
+                if ($("autoStopOnAccepted"))
+                    $("autoStopOnAccepted").checked = !!autoStopOnAccepted;
+                if ($("autoStopOnProblemSwitch"))
+                    $("autoStopOnProblemSwitch").checked = !!autoStopOnProblemSwitch;
+                if ($("allowManualStop"))
+                    $("allowManualStop").checked = !!allowManualStop;
+                if ($("inactivityTimeout"))
+                    $("inactivityTimeout").value = String(inactivityTimeout);
             }
         },
     );
@@ -163,12 +198,13 @@ function saveOptions() {
         : SESSION_DEFAULTS.MAX_SESSIONS_STORED;
 
     const platformsEnabled = [];
-    if ($("platformCodeforces") && $("platformCodeforces").checked) {
-        platformsEnabled.push("codeforces");
-    }
-    if ($("platformLeetCode") && $("platformLeetCode").checked) {
-        platformsEnabled.push("leetcode");
-    }
+    SUPPORTED_PLATFORMS.forEach((platform) => {
+        const el = $(`platform_${platform.key}`);
+        if (el && el.checked) {
+            platformsEnabled.push(platform.key);
+        }
+    });
+
     const showTimerOverlay = $("showTimerOverlay")
         ? $("showTimerOverlay").checked
         : SESSION_DEFAULTS.SHOW_TIMER_OVERLAY;
@@ -179,6 +215,18 @@ function saveOptions() {
     const timerOverlaySize = allowedSizes.includes(timerOverlaySizeRaw)
         ? timerOverlaySizeRaw
         : SESSION_DEFAULTS.TIMER_OVERLAY_SIZE;
+    const autoStopOnAccepted = $("autoStopOnAccepted")
+        ? $("autoStopOnAccepted").checked
+        : SESSION_DEFAULTS.AUTO_STOP_ON_ACCEPTED;
+    const autoStopOnProblemSwitch = $("autoStopOnProblemSwitch")
+        ? $("autoStopOnProblemSwitch").checked
+        : SESSION_DEFAULTS.AUTO_STOP_ON_PROBLEM_SWITCH;
+    const allowManualStop = $("allowManualStop")
+        ? $("allowManualStop").checked
+        : SESSION_DEFAULTS.ALLOW_MANUAL_STOP;
+    const inactivityTimeoutRaw = $("inactivityTimeout")
+        ? parseInt($("inactivityTimeout").value, 10)
+        : SESSION_DEFAULTS.INACTIVITY_TIMEOUT_MINUTES;
 
     const autoStartDelay = Number.isFinite(autoStartDelayRaw)
         ? Math.max(0, autoStartDelayRaw)
@@ -189,6 +237,9 @@ function saveOptions() {
     const maxSessionsStored = Number.isFinite(maxSessionsRaw)
         ? Math.max(1, maxSessionsRaw)
         : SESSION_DEFAULTS.MAX_SESSIONS_STORED;
+    const inactivityTimeoutMinutes = Number.isFinite(inactivityTimeoutRaw)
+        ? Math.max(0, inactivityTimeoutRaw)
+        : SESSION_DEFAULTS.INACTIVITY_TIMEOUT_MINUTES;
 
     const toSave = {
         github_owner: owner,
@@ -205,11 +256,13 @@ function saveOptions() {
         AUTO_START_DELAY_SECONDS: autoStartDelay,
         SESSION_PRUNE_DAYS: sessionPruneDays,
         MAX_SESSIONS_STORED: maxSessionsStored,
-        SUPPORTED_PLATFORMS_ENABLED: platformsEnabled.length
-            ? platformsEnabled
-            : SESSION_DEFAULTS.SUPPORTED_PLATFORMS_ENABLED,
+        SUPPORTED_PLATFORMS_ENABLED: platformsEnabled,
         SHOW_TIMER_OVERLAY: !!showTimerOverlay,
         TIMER_OVERLAY_SIZE: timerOverlaySize,
+        AUTO_STOP_ON_ACCEPTED: !!autoStopOnAccepted,
+        AUTO_STOP_ON_PROBLEM_SWITCH: !!autoStopOnProblemSwitch,
+        ALLOW_MANUAL_STOP: !!allowManualStop,
+        INACTIVITY_TIMEOUT_MINUTES: inactivityTimeoutMinutes,
     };
 
     chrome.storage.local.set(toSave, () => {

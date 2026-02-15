@@ -7,7 +7,9 @@ Top-level layout and the purpose of each directory.
 ├─ manifest.json          # Extension manifest
 ├─ src/                   # Source files (MV3)
 │  ├─ background/          # Service worker modules
-│  ├─ adapters/            # Platform-specific DOM adapters
+│  ├─ adapters/            # Legacy platform adapters
+│  ├─ content/             # Content scripts (Session Tracker)
+│  │  └─ adapters/         # New session adapters
 │  ├─ scrapers/            # Platform-specific HTML scrapers
 │  ├─ utils/               # Templates and file generation
 │  ├─ content.js           # Content script entry

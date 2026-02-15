@@ -10,6 +10,15 @@ import {
     resetTimer,
 } from "./timerEngine.js";
 
+let writeLock = Promise.resolve();
+
+function withLock(action) {
+    const run = async () => action();
+    const next = writeLock.then(run, run);
+    writeLock = next.catch(() => {});
+    return next;
+}
+
 function normalizeDifficulty(value) {
     if (typeof value === "number" && Number.isFinite(value)) return value;
     if (typeof value === "string" && value.trim()) return value.trim();
@@ -33,122 +42,140 @@ export async function upsertSession({
     problemId,
     difficulty = null,
 }) {
-    const sessions = await loadSessions();
-    const idx = findSessionIndex(sessions, platform, problemId);
-    const now = nowSeconds();
+    return withLock(async () => {
+        const sessions = await loadSessions();
+        const idx = findSessionIndex(sessions, platform, problemId);
+        const now = nowSeconds();
 
-    if (idx === -1) {
-        const session = {
-            platform,
-            problemId,
-            difficulty: normalizeDifficulty(difficulty),
-            startTime: null,
-            endTime: null,
-            verdict: null,
-            language: null,
-            attemptCount: 0,
-            elapsedSeconds: 0,
-            isPaused: false,
-            pausedAt: null,
-            firstSeen: now,
-            lastSeen: now,
-            lastUpdated: now,
-        };
-        sessions.push(session);
+        if (idx === -1) {
+            const session = {
+                platform,
+                problemId,
+                difficulty: normalizeDifficulty(difficulty),
+                startTime: null,
+                endTime: null,
+                verdict: null,
+                language: null,
+                attemptCount: 0,
+                elapsedSeconds: 0,
+                isPaused: false,
+                pausedAt: null,
+                firstSeen: now,
+                lastSeen: now,
+                lastUpdated: now,
+                lastSubmissionId: null,
+            };
+            sessions.push(session);
+            await saveSessions(sessions);
+            return session;
+        }
+
+        const session = sessions[idx];
+        session.lastSeen = now;
+        session.lastUpdated = now;
+        const normalizedDifficulty = normalizeDifficulty(difficulty);
+        if (normalizedDifficulty !== null) session.difficulty = normalizedDifficulty;
+
         await saveSessions(sessions);
         return session;
-    }
-
-    const session = sessions[idx];
-    session.lastSeen = now;
-    session.lastUpdated = now;
-    const normalizedDifficulty = normalizeDifficulty(difficulty);
-    if (normalizedDifficulty !== null) session.difficulty = normalizedDifficulty;
-
-    await saveSessions(sessions);
-    return session;
+    });
 }
 
 export async function startSessionTimer({ platform, problemId, startedAt = null }) {
-    const sessions = await loadSessions();
-    const idx = findSessionIndex(sessions, platform, problemId);
-    const now = startedAt || nowSeconds();
+    return withLock(async () => {
+        const sessions = await loadSessions();
+        const idx = findSessionIndex(sessions, platform, problemId);
+        const now = startedAt || nowSeconds();
 
-    let session = null;
-    if (idx === -1) {
-        session = {
-            platform,
-            problemId,
-            difficulty: null,
-            startTime: now,
-            endTime: null,
-            verdict: null,
-            language: null,
-            attemptCount: 0,
-            elapsedSeconds: 0,
-            isPaused: false,
-            pausedAt: null,
-            firstSeen: now,
-            lastSeen: now,
-            lastUpdated: now,
-        };
-        sessions.push(session);
-    } else {
-        session = sessions[idx];
-        startTimer(session, now);
-        session.lastUpdated = now;
-    }
+        let session = null;
+        if (idx === -1) {
+            session = {
+                platform,
+                problemId,
+                difficulty: null,
+                startTime: null,
+                endTime: null,
+                verdict: null,
+                language: null,
+                attemptCount: 0,
+                elapsedSeconds: 0,
+                isPaused: false,
+                pausedAt: null,
+                firstSeen: now,
+                lastSeen: now,
+                lastUpdated: now,
+            };
+            sessions.push(session);
+            startTimer(session, now);
+            session.lastUpdated = now;
+        } else {
+            session = sessions[idx];
+            startTimer(session, now);
+            session.lastUpdated = now;
+        }
 
-    await saveSessions(sessions);
-    return session;
+        await saveSessions(sessions);
+        return session;
+    });
 }
 
 export async function stopSessionTimer({ platform, problemId, stoppedAt = null }) {
-    const sessions = await loadSessions();
-    const idx = findSessionIndex(sessions, platform, problemId);
-    if (idx === -1) return null;
+    return withLock(async () => {
+        const sessions = await loadSessions();
+        const idx = findSessionIndex(sessions, platform, problemId);
+        if (idx === -1) return null;
 
-    const session = sessions[idx];
-    stopTimer(session, stoppedAt || nowSeconds());
-    session.lastUpdated = nowSeconds();
-    await saveSessions(sessions);
-    return session;
+        const session = sessions[idx];
+        const ts = stoppedAt || nowSeconds();
+        stopTimer(session, ts);
+        session.lastUpdated = ts;
+        await saveSessions(sessions);
+        return session;
+    });
 }
 
 export async function pauseSessionTimer({ platform, problemId, pausedAt = null }) {
-    const sessions = await loadSessions();
-    const idx = findSessionIndex(sessions, platform, problemId);
-    if (idx === -1) return null;
+    return withLock(async () => {
+        const sessions = await loadSessions();
+        const idx = findSessionIndex(sessions, platform, problemId);
+        if (idx === -1) return null;
 
-    const session = sessions[idx];
-    pauseTimer(session, pausedAt || nowSeconds());
-    session.lastUpdated = nowSeconds();
-    await saveSessions(sessions);
-    return session;
+        const session = sessions[idx];
+        const effectiveTime = pausedAt || nowSeconds();
+        pauseTimer(session, effectiveTime);
+        session.lastUpdated = effectiveTime;
+        await saveSessions(sessions);
+        return session;
+    });
 }
 
 export async function resumeSessionTimer({ platform, problemId, resumedAt = null }) {
-    const sessions = await loadSessions();
-    const idx = findSessionIndex(sessions, platform, problemId);
-    if (idx === -1) return null;
+    return withLock(async () => {
+        const sessions = await loadSessions();
+        const idx = findSessionIndex(sessions, platform, problemId);
+        if (idx === -1) return null;
 
-    const session = sessions[idx];
-    resumeTimer(session, resumedAt || nowSeconds());
-    session.lastUpdated = nowSeconds();
-    await saveSessions(sessions);
-    return session;
+        const session = sessions[idx];
+        const effectiveTime = resumedAt || nowSeconds();
+        resumeTimer(session, effectiveTime);
+        session.lastUpdated = effectiveTime;
+        await saveSessions(sessions);
+        return session;
+    });
 }
 
 export async function resetSessionTimer({ platform, problemId }) {
-    const sessions = await loadSessions();
-    const idx = findSessionIndex(sessions, platform, problemId);
-    if (idx === -1) return null;
+    return withLock(async () => {
+        const sessions = await loadSessions();
+        const idx = findSessionIndex(sessions, platform, problemId);
+        if (idx === -1) return null;
 
-    const session = sessions[idx];
-    resetTimer(session);
-    session.lastUpdated = nowSeconds();
-    await saveSessions(sessions);
-    return session;
+        const session = sessions[idx];
+        resetTimer(session);
+        session.lastUpdated = nowSeconds();
+        await saveSessions(sessions);
+        return session;
+    });
 }
 
 export async function recordSubmission({
@@ -158,58 +185,64 @@ export async function recordSubmission({
     language,
     submissionId = null,
     submittedAt = null,
+    isSuccess = null,
+    autoStop = true,
 }) {
-    const sessions = await loadSessions();
-    const idx = findSessionIndex(sessions, platform, problemId);
-    const now = submittedAt || nowSeconds();
+    return withLock(async () => {
+        const sessions = await loadSessions();
+        const idx = findSessionIndex(sessions, platform, problemId);
+        const now = submittedAt || nowSeconds();
 
-    let session = null;
-    if (idx === -1) {
-        session = {
-            platform,
-            problemId,
-            difficulty: null,
-            startTime: null,
-            endTime: null,
-            verdict: null,
-            language: null,
-            attemptCount: 0,
-            elapsedSeconds: 0,
-            isPaused: false,
-            pausedAt: null,
-            firstSeen: now,
-            lastSeen: now,
-            lastUpdated: now,
-            lastSubmissionId: null,
-        };
-        sessions.push(session);
-    } else {
-        session = sessions[idx];
-    }
-
-    if (submissionId && session.lastSubmissionId === submissionId) {
-        return session;
-    }
-
-    if (submissionId) session.lastSubmissionId = submissionId;
-    session.attemptCount = (session.attemptCount || 0) + 1;
-    if (verdict) session.verdict = verdict;
-    if (language) session.language = language;
-    session.lastSeen = now;
-    session.lastUpdated = now;
-
-    if (isAcceptedVerdict(verdict)) {
-        const elapsed = Number.isFinite(session.elapsedSeconds)
-            ? session.elapsedSeconds
-            : 0;
-        if (!session.startTime && elapsed === 0) {
-            session.startTime = session.firstSeen || now;
+        let session = null;
+        if (idx === -1) {
+            session = {
+                platform,
+                problemId,
+                difficulty: null,
+                startTime: null,
+                endTime: null,
+                verdict: null,
+                language: null,
+                attemptCount: 0,
+                elapsedSeconds: 0,
+                isPaused: false,
+                pausedAt: null,
+                firstSeen: now,
+                lastSeen: now,
+                lastUpdated: now,
+                lastSubmissionId: null,
+            };
+            sessions.push(session);
+        } else {
+            session = sessions[idx];
         }
-        stopTimer(session, now);
-    }
 
-    await saveSessions(sessions);
-    return session;
+        if (submissionId && session.lastSubmissionId === submissionId) {
+            return session;
+        }
+
+        if (submissionId) session.lastSubmissionId = submissionId;
+        session.attemptCount = (session.attemptCount || 0) + 1;
+        if (verdict) session.verdict = verdict;
+        if (language) session.language = language;
+        session.lastSeen = now;
+        session.lastUpdated = now;
+
+        const success =
+            typeof isSuccess === "boolean" ? isSuccess : isAcceptedVerdict(verdict);
+        if (autoStop && success) {
+            const elapsed = Number.isFinite(session.elapsedSeconds)
+                ? session.elapsedSeconds
+                : 0;
+            if (!session.startTime && elapsed === 0) {
+                session.startTime = session.firstSeen || now;
+            }
+            stopTimer(session, now);
+        }
+
+        await saveSessions(sessions);
+        return session;
+    });
 }
 
 export async function getSessionByKey(platform, problemId) {
@@ -223,6 +256,8 @@ export async function getAllSessions() {
 }
 
 export async function clearAllSessions() {
-    await saveSessions([]);
-    return [];
+    return withLock(async () => {
+        await saveSessions([]);
+        return [];
+    });
 }
