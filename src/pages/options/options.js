@@ -4,10 +4,45 @@
 
 import { SUPPORTED_PLATFORMS } from "../../utils/constants.js";
 import { SESSION_DEFAULTS } from "../../shared/sessionDefaults.js";
-import { SESSION_EXPORT_VERSION } from "../../shared/sessionSchema.js";
 
 const $ = (id) => document.getElementById(id);
+const SETTINGS_EXPORT_KEYS = new Set([
+    "github_owner",
+    "github_repo",
+    "github_branch",
+    "github_language",
+    "github_file_structure",
+    "template_commit",
+    "template_path",
+    "template_readme",
+    "template_solution",
+    "includeProblemStatement",
+    "allowUpdateDefault",
+    "showBubble",
+    "autoSave",
+    ...Object.keys(SESSION_DEFAULTS),
+]);
+
 const EXCLUDED_EXPORT_KEYS = new Set(["github_token", "device_flow_state"]);
+
+const SETTINGS_EXPORT_FORMAT = "codebridge-settings";
+const SETTINGS_EXPORT_VERSION = 1;
+
+const USER_DATA_EXPORT_FORMAT = "codebridge-user-data";
+const USER_DATA_EXPORT_VERSION = 1;
+
+function updateDelayedAutoLabel() {
+    const option = document.querySelector(
+        "#timerStartMode option[value='DELAYED_AUTO']",
+    );
+    if (!option) return;
+    const delayEl = $("autoStartDelay");
+    const raw = delayEl ? parseInt(delayEl.value, 10) : NaN;
+    const delay = Number.isFinite(raw)
+        ? Math.max(0, raw)
+        : SESSION_DEFAULTS.AUTO_START_DELAY_SECONDS;
+    option.textContent = `Delayed Auto (${delay}s)`;
+}
 
 function loadOptions() {
     chrome.storage.local.get(
@@ -64,7 +99,8 @@ function loadOptions() {
                     typeof items.allowUpdateDefault !== "undefined" &&
                     $("allowUpdateDefault")
                 ) {
-                    $("allowUpdateDefault").checked = !!items.allowUpdateDefault;
+                    $("allowUpdateDefault").checked =
+                        !!items.allowUpdateDefault;
                 }
 
                 if (
@@ -124,10 +160,10 @@ function loadOptions() {
                     $("sessionPruneDays").value = String(pruneDays);
                 if ($("maxSessionsStored"))
                     $("maxSessionsStored").value = String(maxSessions);
-                if ($("timerStartMode"))
-                    $("timerStartMode").value = timerMode;
+                if ($("timerStartMode")) $("timerStartMode").value = timerMode;
                 if ($("autoStartDelay"))
                     $("autoStartDelay").value = String(autoDelay);
+                updateDelayedAutoLabel();
 
                 // Dynamic Platform List
                 const container = $("platformsContainer");
@@ -143,7 +179,9 @@ function loadOptions() {
                         input.checked = platforms.includes(platform.key);
 
                         label.appendChild(input);
-                        label.appendChild(document.createTextNode(" " + platform.name));
+                        label.appendChild(
+                            document.createTextNode(" " + platform.name),
+                        );
                         container.appendChild(label);
                     });
                 }
@@ -155,7 +193,8 @@ function loadOptions() {
                 if ($("autoStopOnAccepted"))
                     $("autoStopOnAccepted").checked = !!autoStopOnAccepted;
                 if ($("autoStopOnProblemSwitch"))
-                    $("autoStopOnProblemSwitch").checked = !!autoStopOnProblemSwitch;
+                    $("autoStopOnProblemSwitch").checked =
+                        !!autoStopOnProblemSwitch;
                 if ($("allowManualStop"))
                     $("allowManualStop").checked = !!allowManualStop;
                 if ($("inactivityTimeout"))
@@ -170,7 +209,10 @@ function sendMessage(action, payload = {}) {
         try {
             chrome.runtime.sendMessage({ action, ...payload }, (resp) => {
                 if (chrome.runtime.lastError) {
-                    resolve({ success: false, message: chrome.runtime.lastError.message });
+                    resolve({
+                        success: false,
+                        message: chrome.runtime.lastError.message,
+                    });
                     return;
                 }
                 resolve(resp || { success: false, message: "No response" });
@@ -186,87 +228,10 @@ function setStatus(message, tone = "accent") {
     if (!status) return;
     status.textContent = message || "";
     if (!message) return;
-    status.style.color =
-        tone === "error" ? "var(--error)" : "var(--accent)";
+    status.style.color = tone === "error" ? "var(--error)" : "var(--accent)";
     setTimeout(() => {
         if (status.textContent === message) status.textContent = "";
     }, 4000);
-}
-
-async function exportData() {
-    const [settings, sessionsResp] = await Promise.all([
-        new Promise((resolve) => chrome.storage.local.get(null, (items) => resolve(items || {}))),
-        sendMessage("getSessions"),
-    ]);
-
-    const filteredSettings = Object.fromEntries(
-        Object.entries(settings).filter(([key]) => !EXCLUDED_EXPORT_KEYS.has(key)),
-    );
-
-    const sessions = sessionsResp && sessionsResp.success ? sessionsResp.sessions || [] : [];
-    const payload = {
-        formatVersion: SESSION_EXPORT_VERSION,
-        exportedAt: new Date().toISOString(),
-        settings: filteredSettings,
-        sessions,
-    };
-
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-        type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `codebridge-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-
-    setStatus("Backup exported.", "accent");
-}
-
-async function importData() {
-    const fileInput = $("importFile");
-    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
-        setStatus("Select a backup file first.", "error");
-        return;
-    }
-
-    let parsed = null;
-    try {
-        const text = await fileInput.files[0].text();
-        parsed = JSON.parse(text);
-    } catch (err) {
-        setStatus("Invalid JSON file.", "error");
-        return;
-    }
-
-    if (
-        parsed &&
-        typeof parsed.formatVersion === "number" &&
-        parsed.formatVersion !== SESSION_EXPORT_VERSION
-    ) {
-        setStatus("Unsupported backup format version.", "error");
-        return;
-    }
-
-    const settings = parsed && parsed.settings ? parsed.settings : {};
-    if (settings.github_token) {
-        delete settings.github_token;
-    }
-
-    const sessions = Array.isArray(parsed && parsed.sessions) ? parsed.sessions : [];
-    const replace = $("replaceSessions") ? $("replaceSessions").checked : true;
-    const mode = replace ? "replace" : "merge";
-
-    await new Promise((resolve) => chrome.storage.local.set(settings, resolve));
-    const resp = await sendMessage("importSessions", { sessions, mode });
-
-    if (resp && resp.success) {
-        loadOptions();
-        setStatus(`Import completed (${resp.imported || 0} sessions).`, "accent");
-    } else {
-        setStatus(resp.message || "Import failed.", "error");
-    }
 }
 
 function saveOptions() {
@@ -390,8 +355,200 @@ function resetTemplates() {
     }
 }
 
+function pickSettings(items) {
+    const output = {};
+    SETTINGS_EXPORT_KEYS.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(items, key)) {
+            output[key] = items[key];
+        }
+    });
+    return output;
+}
+
+async function exportSettings() {
+    const settings = await new Promise((resolve) =>
+        chrome.storage.local.get(Array.from(SETTINGS_EXPORT_KEYS), (items) =>
+            resolve(items || {}),
+        ),
+    );
+
+    const payload = {
+        format: SETTINGS_EXPORT_FORMAT,
+        version: SETTINGS_EXPORT_VERSION,
+        exportedAt: new Date().toISOString(),
+        settings: pickSettings(settings),
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `codebridge-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 800);
+    setStatus("Settings exported.", "accent");
+}
+
+async function importSettings() {
+    const fileInput = $("importSettingsFile");
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        setStatus("Select a settings file first.", "error");
+        return;
+    }
+
+    let parsed = null;
+    try {
+        const text = await fileInput.files[0].text();
+        parsed = JSON.parse(text);
+    } catch (err) {
+        setStatus("Invalid JSON file.", "error");
+        return;
+    }
+
+    if (parsed && parsed.format && parsed.format !== SETTINGS_EXPORT_FORMAT) {
+        setStatus("Unsupported settings format.", "error");
+        return;
+    }
+
+    const settingsPayload =
+        parsed && typeof parsed === "object"
+            ? parsed.settings && typeof parsed.settings === "object"
+                ? parsed.settings
+                : parsed
+            : null;
+
+    if (!settingsPayload || typeof settingsPayload !== "object") {
+        setStatus("No settings found in file.", "error");
+        return;
+    }
+
+    const sanitized = { ...settingsPayload };
+    EXCLUDED_EXPORT_KEYS.forEach((key) => {
+        if (key in sanitized) {
+            delete sanitized[key];
+        }
+    });
+    const toSave = pickSettings(sanitized);
+    if (!Object.keys(toSave).length) {
+        setStatus("No valid settings found to import.", "error");
+        return;
+    }
+
+    await new Promise((resolve) => chrome.storage.local.set(toSave, resolve));
+    loadOptions();
+    setStatus("Settings imported.", "accent");
+}
+
+function createCsvValue(value) {
+    if (value === null || value === undefined) return "";
+    const str = String(value);
+    if (/[,"\n]/.test(str)) {
+        return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+}
+
+function secondsToIso(seconds) {
+    if (!Number.isFinite(seconds)) return "";
+    try {
+        return new Date(seconds * 1000).toISOString();
+    } catch (e) {
+        return "";
+    }
+}
+
+function sessionsToCsv(sessions) {
+    const columns = [
+        "sessionId",
+        "platform",
+        "problemId",
+        "difficulty",
+        "status",
+        "stopReason",
+        "verdict",
+        "language",
+        "attemptCount",
+        "elapsedSeconds",
+        "startTime",
+        "endTime",
+        "firstSeen",
+        "lastSeen",
+        "lastUpdated",
+        "problemKey",
+        "schemaVersion",
+    ];
+
+    const timeColumns = new Set([
+        "startTime",
+        "endTime",
+        "firstSeen",
+        "lastSeen",
+        "lastUpdated",
+    ]);
+
+    const rows = sessions.map((session) => {
+        return columns
+            .map((key) => {
+                const value = session ? session[key] : "";
+                if (timeColumns.has(key)) {
+                    return createCsvValue(secondsToIso(value));
+                }
+                return createCsvValue(value);
+            })
+            .join(",");
+    });
+
+    return [columns.join(","), ...rows].join("\n");
+}
+
+async function exportUserData() {
+    const format = $("userDataFormat") ? $("userDataFormat").value : "json";
+    const resp = await sendMessage("getSessions");
+    if (!resp || !resp.success) {
+        setStatus(resp.message || "Failed to load sessions.", "error");
+        return;
+    }
+
+    const sessions = Array.isArray(resp.sessions) ? resp.sessions : [];
+    const dateTag = new Date().toISOString().slice(0, 10);
+
+    if (format === "csv") {
+        const csv = sessionsToCsv(sessions);
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `codebridge-user-data-${dateTag}.csv`;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 800);
+        setStatus("User data exported (CSV).", "accent");
+        return;
+    }
+
+    const payload = {
+        format: USER_DATA_EXPORT_FORMAT,
+        version: USER_DATA_EXPORT_VERSION,
+        exportedAt: new Date().toISOString(),
+        sessions,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `codebridge-user-data-${dateTag}.json`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 800);
+    setStatus("User data exported (JSON).", "accent");
+}
+
 async function clearExtensionStorage() {
-    if (!confirm("This will clear ALL settings and sign you out. Are you sure?")) {
+    if (
+        !confirm("This will clear ALL settings and sign you out. Are you sure?")
+    ) {
         return;
     }
     await sendMessage("clearSessions");
@@ -406,10 +563,17 @@ document.addEventListener("DOMContentLoaded", () => {
     $("saveBtn").addEventListener("click", saveOptions);
     $("resetTemplates").addEventListener("click", resetTemplates);
     $("clearStorageBtn").addEventListener("click", clearExtensionStorage);
-    if ($("exportDataBtn")) {
-        $("exportDataBtn").addEventListener("click", exportData);
+    if ($("autoStartDelay")) {
+        $("autoStartDelay").addEventListener("input", updateDelayedAutoLabel);
+        $("autoStartDelay").addEventListener("change", updateDelayedAutoLabel);
     }
-    if ($("importDataBtn")) {
-        $("importDataBtn").addEventListener("click", importData);
+    if ($("exportSettingsBtn")) {
+        $("exportSettingsBtn").addEventListener("click", exportSettings);
+    }
+    if ($("importSettingsBtn")) {
+        $("importSettingsBtn").addEventListener("click", importSettings);
+    }
+    if ($("exportUserDataBtn")) {
+        $("exportUserDataBtn").addEventListener("click", exportUserData);
     }
 });

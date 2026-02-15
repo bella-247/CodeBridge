@@ -23,7 +23,7 @@ registerMessageHandlers();
 
 // Initialize session tracking defaults + prune
 initSessionTracking().catch((err) => {
-    log("session tracking init failed:", err && err.message);
+    log("session tracking init failed:", err?.message ?? String(err));
 });
 
 // Register tab injection for LeetCode pages

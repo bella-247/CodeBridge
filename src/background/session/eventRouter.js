@@ -19,7 +19,7 @@ import {
     touchSession,
 } from "./sessionManager.js";
 import { pruneSessions } from "./pruneManager.js";
-import { initSessionStore, replaceAllSessions, saveSessions } from "./sessionStore.js";
+import { initSessionStore } from "./sessionStore.js";
 
 export async function initSessionTracking() {
     await ensureSessionDefaults();
@@ -151,17 +151,4 @@ export async function handleGetSession(message) {
 export async function handleClearSessions() {
     await clearAllSessions();
     return { success: true };
-}
-
-export async function handleImportSessions(message) {
-    if (!message || !Array.isArray(message.sessions)) {
-        return { success: false, message: "Missing sessions payload" };
-    }
-    const mode = message.mode === "replace" ? "replace" : "merge";
-    if (mode === "replace") {
-        const saved = await replaceAllSessions(message.sessions);
-        return { success: true, imported: saved.length, mode };
-    }
-    const saved = await saveSessions(message.sessions);
-    return { success: true, imported: saved.length, mode };
 }

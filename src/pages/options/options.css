@@ -11,6 +11,8 @@ body {
 
 /* Container for everything */
 .app-container {
+    display: flex;
+    flex-direction: column;
     max-width: 900px;
     margin: 0 auto;
     gap: 24px;
@@ -31,6 +33,21 @@ header .muted {
     color: rgba(255, 255, 255, 0.6);
     text-transform: uppercase;
     margin: 20px 0 8px 0;
+}
+
+.card-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.card-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 6px 0 14px;
+    line-height: 1.4;
 }
 
 /* Form grids */
@@ -118,14 +135,4 @@ header .muted {
     padding: 8px 0;
     font-size: 12px;
     color: var(--text-muted);
-}
-
-.field-hint {
-    font-size: 11px;
-    color: var(--text-muted);
-    margin-top: 8px;
-}
-
-.field-hint.warning {
-    color: #f59e0b;
 }

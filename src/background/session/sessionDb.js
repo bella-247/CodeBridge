@@ -37,6 +37,7 @@ export function openSessionDb() {
             request.onsuccess = () => {
                 const db = request.result;
                 db.onversionchange = () => {
+                    dbPromise = null;
                     db.close();
                 };
                 resolve(db);
@@ -48,6 +49,9 @@ export function openSessionDb() {
         } catch (err) {
             reject(err);
         }
+    }).catch((err) => {
+        dbPromise = null;
+        throw err;
     });
 
     return dbPromise;

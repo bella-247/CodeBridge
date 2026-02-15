@@ -105,17 +105,32 @@ export const HackerRankSessionAdapter = createAdapter({
     getSubmissionData: () => extractSubmissionData(),
 
     observeSubmissionData: (callback) => {
+        let debounceId = null;
+        let lastKey = null;
+
+        const emit = (data) => {
+            if (!data || !data.verdict) return;
+            const key = String(data.verdict).trim();
+            if (!key || key === lastKey) return;
+            lastKey = key;
+            callback(data);
+        };
+
         const observer = new MutationObserver(() => {
-            const data = extractSubmissionData();
-            if (data && data.verdict) {
-                callback(data);
-            }
+            if (debounceId) clearTimeout(debounceId);
+            debounceId = setTimeout(() => {
+                const data = extractSubmissionData();
+                emit(data);
+            }, 200);
         });
         observer.observe(document.documentElement || document.body, {
             childList: true,
             subtree: true,
         });
-        return () => observer.disconnect();
+        return () => {
+            observer.disconnect();
+            if (debounceId) clearTimeout(debounceId);
+        };
     },
 
     isSuccessfulSubmission: (data) => {

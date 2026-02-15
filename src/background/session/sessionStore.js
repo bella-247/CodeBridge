@@ -17,6 +17,8 @@ import {
     normalizeSessionRecord,
 } from "./sessionUtils.js";
 
+let initPromise = null;
+
 function requestToPromise(request) {
     return new Promise((resolve, reject) => {
         request.onsuccess = () => resolve(request.result);
@@ -40,9 +42,22 @@ async function withStore(mode, action) {
 }
 
 export async function initSessionStore() {
-    await openSessionDb();
-    await migrateLegacySessions();
-    await upgradeSessionSchema();
+    if (initPromise) return initPromise;
+
+    initPromise = (async () => {
+        await openSessionDb();
+        await migrateLegacySessions();
+        await upgradeSessionSchema();
+    })();
+
+    try {
+        await initPromise;
+    } catch (err) {
+        initPromise = null;
+        throw err;
+    }
+
+    return initPromise;
 }
 
 export async function getSessionById(sessionId) {

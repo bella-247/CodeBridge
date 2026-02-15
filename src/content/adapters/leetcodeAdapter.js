@@ -125,6 +125,30 @@ export const LeetCodeSessionAdapter = createAdapter({
     getDifficulty: () => extractDifficulty(),
     getSubmissionData: () => extractSubmissionData(),
     observeSubmissionData: (callback) => {
+        let debounceId = null;
+        let lastSubmissionKey = null;
+
+        const buildSubmissionKey = (data) => {
+            if (!data) return null;
+            const parts = [
+                data.submissionId || "",
+                data.verdict || "",
+                data.language || "",
+                data.runtime || "",
+                data.memory || "",
+            ];
+            const key = parts.join("|").trim();
+            return key || null;
+        };
+
+        const emit = (data) => {
+            if (!data || !data.verdict) return;
+            const key = buildSubmissionKey(data);
+            if (!key || key === lastSubmissionKey) return;
+            lastSubmissionKey = key;
+            callback(data);
+        };
+
         // Inject interceptor
         if (!document.getElementById("cb-leetcode-interceptor")) {
             const script = document.createElement("script");
@@ -135,10 +159,11 @@ export const LeetCodeSessionAdapter = createAdapter({
 
         const messageHandler = (event) => {
             if (event.source !== window) return;
+            if (event.origin !== window.location.origin) return;
             if (event.data && event.data.type === "CODEBRIDGE_LEETCODE_SUBMISSION") {
                 const payload = event.data.payload;
                 if (payload) {
-                    callback({
+                    emit({
                         verdict: normalizeVerdict(payload.status_msg),
                         language: payload.lang,
                         runtime: payload.status_runtime,
@@ -153,10 +178,11 @@ export const LeetCodeSessionAdapter = createAdapter({
 
         // Fallback: DOM observer
         const observer = new MutationObserver(() => {
-            const data = extractSubmissionData();
-            if (data && data.verdict) {
-                callback(data);
-            }
+            if (debounceId) clearTimeout(debounceId);
+            debounceId = setTimeout(() => {
+                const data = extractSubmissionData();
+                emit(data);
+            }, 200);
         });
         observer.observe(document.documentElement || document.body, {
             childList: true,
@@ -166,6 +192,7 @@ export const LeetCodeSessionAdapter = createAdapter({
         return () => {
             window.removeEventListener("message", messageHandler);
             observer.disconnect();
+            if (debounceId) clearTimeout(debounceId);
         };
     },
     isSuccessfulSubmission: (data) => {

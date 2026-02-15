@@ -8,7 +8,6 @@ export const SESSION_DB = Object.freeze({
     STORE: "sessions",
 });
 
-export const SESSION_EXPORT_VERSION = 1;
 
 export const LEGACY_SESSION_STORAGE_KEY = "cp_sessions";
 export const SESSION_MIGRATION_FLAG_KEY = "cp_sessions_migrated_v2";

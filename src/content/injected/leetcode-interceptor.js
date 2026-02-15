@@ -1,4 +1,5 @@
 (function() {
+    const trustedOrigin = window.location.origin;
     const originalFetch = window.fetch;
     window.fetch = async function(...args) {
         const response = await originalFetch(...args);
@@ -12,7 +13,7 @@
                         window.postMessage({
                             type: "CODEBRIDGE_LEETCODE_SUBMISSION",
                             payload: data
-                        }, "*");
+                        }, trustedOrigin);
                     }
                 }).catch(() => {});
             }

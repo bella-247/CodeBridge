@@ -48,7 +48,12 @@ function sortByLatest(a, b) {
     return getSortTimestamp(b) - getSortTimestamp(a);
 }
 
-function createSession({ platform, problemId, difficulty = null, createdAt = null }) {
+function createSession({
+    platform,
+    problemId,
+    difficulty = null,
+    createdAt = null,
+}) {
     const now = createdAt || nowSeconds();
     const normalizedDifficulty = normalizeDifficulty(difficulty);
     return {
@@ -98,7 +103,8 @@ function normalizeStopReason(reason) {
     if (r === SESSION_STOP_REASONS.TIMEOUT) return SESSION_STOP_REASONS.TIMEOUT;
     if (r === SESSION_STOP_REASONS.PROBLEM_SWITCH)
         return SESSION_STOP_REASONS.PROBLEM_SWITCH;
-    if (r === SESSION_STOP_REASONS.ACCEPTED) return SESSION_STOP_REASONS.ACCEPTED;
+    if (r === SESSION_STOP_REASONS.ACCEPTED)
+        return SESSION_STOP_REASONS.ACCEPTED;
     if (r === SESSION_STOP_REASONS.RESET) return SESSION_STOP_REASONS.RESET;
     return SESSION_STOP_REASONS.UNKNOWN;
 }
@@ -131,12 +137,22 @@ export async function startSessionTimer({
         const now = startedAt || nowSeconds();
         let session = await getActiveSessionForProblem(platform, problemId);
 
-        if (!session || session.endTime || !isActiveStatus(inferStatus(session))) {
-            session = createSession({ platform, problemId, difficulty, createdAt: now });
+        if (
+            !session ||
+            session.endTime ||
+            !isActiveStatus(inferStatus(session))
+        ) {
+            session = createSession({
+                platform,
+                problemId,
+                difficulty,
+                createdAt: now,
+            });
         }
 
         const normalizedDifficulty = normalizeDifficulty(difficulty);
-        if (normalizedDifficulty !== null) session.difficulty = normalizedDifficulty;
+        if (normalizedDifficulty !== null)
+            session.difficulty = normalizedDifficulty;
 
         startTimer(session, now);
         session.status = SESSION_STATUS.ACTIVE;
@@ -156,7 +172,7 @@ export async function stopSessionTimer({
     reason = null,
 }) {
     return withLock(async () => {
-        const session = await getActiveSessionForProblem(platform, problemId);
+        let session = await getActiveSessionForProblem(platform, problemId);
         if (!session) return null;
 
         const ts = stoppedAt || nowSeconds();
@@ -171,9 +187,13 @@ export async function stopSessionTimer({
     });
 }
 
-export async function pauseSessionTimer({ platform, problemId, pausedAt = null }) {
+export async function pauseSessionTimer({
+    platform,
+    problemId,
+    pausedAt = null,
+}) {
     return withLock(async () => {
-        const session = await getActiveSessionForProblem(platform, problemId);
+        let session = await getActiveSessionForProblem(platform, problemId);
         if (!session) return null;
 
         const effectiveTime = pausedAt || nowSeconds();
@@ -191,7 +211,7 @@ export async function resumeSessionTimer({
     resumedAt = null,
 }) {
     return withLock(async () => {
-        const session = await getActiveSessionForProblem(platform, problemId);
+        let session = await getActiveSessionForProblem(platform, problemId);
         if (!session) return null;
 
         const effectiveTime = resumedAt || nowSeconds();
@@ -206,7 +226,7 @@ export async function resumeSessionTimer({
 
 export async function resetSessionTimer({ platform, problemId }) {
     return withLock(async () => {
-        const session = await getActiveSessionForProblem(platform, problemId);
+        let session = await getActiveSessionForProblem(platform, problemId);
         if (!session) return null;
 
         resetTimer(session);
@@ -232,15 +252,26 @@ export async function recordSubmission({
     return withLock(async () => {
         const now = submittedAt || nowSeconds();
         const success =
-            typeof isSuccess === "boolean" ? isSuccess : isAcceptedVerdict(verdict);
+            typeof isSuccess === "boolean"
+                ? isSuccess
+                : isAcceptedVerdict(verdict);
 
         let session = await getActiveSessionForProblem(platform, problemId);
 
-        if (!session || session.endTime || !isActiveStatus(inferStatus(session))) {
+        if (
+            !session ||
+            session.endTime ||
+            !isActiveStatus(inferStatus(session))
+        ) {
             if (!success) {
                 return null;
             }
-            session = createSession({ platform, problemId, difficulty, createdAt: now });
+            session = createSession({
+                platform,
+                problemId,
+                difficulty,
+                createdAt: now,
+            });
         }
 
         if (submissionId && session.lastSubmissionId === submissionId) {
@@ -253,7 +284,8 @@ export async function recordSubmission({
         if (language) session.language = language;
         if (difficulty !== null && difficulty !== undefined) {
             const normalizedDifficulty = normalizeDifficulty(difficulty);
-            if (normalizedDifficulty !== null) session.difficulty = normalizedDifficulty;
+            if (normalizedDifficulty !== null)
+                session.difficulty = normalizedDifficulty;
         }
         session.lastSeen = now;
         session.lastUpdated = now;

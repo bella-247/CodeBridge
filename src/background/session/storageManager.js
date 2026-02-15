@@ -3,20 +3,20 @@
 import { SESSION_DEFAULTS } from "../../shared/sessionDefaults.js";
 
 export function storageGet(keys) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         try {
             chrome.storage.local.get(keys, (items) => {
                 const err = chrome.runtime.lastError;
                 if (err) {
                     console.error("storageGet failed:", err);
-                    resolve({});
+                    reject(err);
                     return;
                 }
                 resolve(items || {});
             });
         } catch (e) {
             console.error("storageGet exception:", e);
-            resolve({});
+            reject(e);
         }
     });
 }
@@ -62,7 +62,15 @@ export function storageRemove(keys) {
 
 export async function ensureSessionDefaults() {
     const keys = Object.keys(SESSION_DEFAULTS);
-    const items = await storageGet(keys);
+    let items = null;
+    try {
+        items = await storageGet(keys);
+    } catch (err) {
+        throw err;
+    }
+    if (!items) {
+        throw new Error("storageGet failed to return settings");
+    }
     const toSet = {};
     for (const key of keys) {
         if (!Object.prototype.hasOwnProperty.call(items, key)) {
