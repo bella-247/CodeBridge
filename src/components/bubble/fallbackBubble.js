@@ -10,6 +10,7 @@ import { log } from "../../core/logger.js";
  */
 function injectFallbackBubble() {
     try {
+        if (window.__cb_bubble_hidden) return false;
         if (document.getElementById("lcgh-bubble")) return false;
 
         // Minimal styles
@@ -41,7 +42,7 @@ function injectFallbackBubble() {
             try {
                 ev.stopPropagation();
                 wrapper.style.display = "none";
-                sessionStorage.setItem("lcgh-bubble-hidden", "1");
+                window.__cb_bubble_hidden = true;
             } catch (e) { }
         });
         wrapper.appendChild(close);

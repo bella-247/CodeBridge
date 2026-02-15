@@ -7,25 +7,12 @@ export function createSettings({ state, ui, getFormValues, actions }) {
         if (saveTimer) clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
             try {
-                const {
-                    owner,
-                    repo,
-                    branch,
-                    language,
-                    fileOrg,
-                    allowUpdate,
-                    showBubble,
-                } = getFormValues();
+                const { language, fileOrg } = getFormValues();
 
                 chrome.storage.local.set(
                     {
-                        github_owner: owner,
-                        github_repo: repo,
-                        github_branch: branch,
                         github_language: language,
                         github_file_structure: fileOrg,
-                        allowUpdateDefault: allowUpdate,
-                        showBubble: showBubble,
                     },
                     () => {
                         console.log("[popup] persisted settings");
@@ -39,28 +26,6 @@ export function createSettings({ state, ui, getFormValues, actions }) {
 
     function applySettings(items) {
         if (!items) return;
-        if (items.github_owner) $("owner").value = items.github_owner;
-        if (items.github_repo) $("repo").value = items.github_repo;
-        if (items.github_branch) $("branch").value = items.github_branch;
-
-        if (
-            typeof items.allowUpdateDefault !== "undefined" &&
-            document.getElementById("allowUpdate")
-        ) {
-            document.getElementById("allowUpdate").checked =
-                !!items.allowUpdateDefault;
-        }
-        if (
-            typeof items.showBubble !== "undefined" &&
-            document.getElementById("showBubble")
-        ) {
-            try {
-                document.getElementById("showBubble").checked =
-                    !!items.showBubble;
-            } catch (e) {
-                // ignore
-            }
-        }
         if (items.github_language) {
             const sel = document.getElementById("language");
             if (sel) {
@@ -82,28 +47,14 @@ export function createSettings({ state, ui, getFormValues, actions }) {
                 }
             }
         }
+
+        if (ui && typeof ui.updateRepoSummary === "function") {
+            ui.updateRepoSummary(items);
+        }
     }
 
     function attachListeners() {
         try {
-            const ownerEl = $("owner");
-            if (ownerEl)
-                ownerEl.addEventListener("input", () => {
-                    persistPopupSettings();
-                    refreshMeta();
-                });
-            const repoEl = $("repo");
-            if (repoEl)
-                repoEl.addEventListener("input", () => {
-                    persistPopupSettings();
-                    refreshMeta();
-                });
-            const branchEl = $("branch");
-            if (branchEl)
-                branchEl.addEventListener("input", () => {
-                    persistPopupSettings();
-                    refreshMeta();
-                });
             const langEl = document.getElementById("language");
             if (langEl)
                 langEl.addEventListener("change", () => {
@@ -117,10 +68,6 @@ export function createSettings({ state, ui, getFormValues, actions }) {
                     persistPopupSettings();
                     refreshMeta();
                 });
-            const allowEl = document.getElementById("allowUpdate");
-            if (allowEl) allowEl.addEventListener("change", persistPopupSettings);
-            const showEl = document.getElementById("showBubble");
-            if (showEl) showEl.addEventListener("change", persistPopupSettings);
         } catch (e) {
             // ignore
         }
@@ -142,13 +89,32 @@ export function createSettings({ state, ui, getFormValues, actions }) {
                 "github_language",
                 "github_file_structure",
                 "allowUpdateDefault",
-                "showBubble",
             ],
             (items) => {
                 applySettings(items);
                 attachListeners();
             },
         );
+
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area !== "local") return;
+            if (
+                changes.github_owner ||
+                changes.github_repo ||
+                changes.github_branch ||
+                changes.allowUpdateDefault
+            ) {
+                chrome.storage.local.get(
+                    [
+                        "github_owner",
+                        "github_repo",
+                        "github_branch",
+                        "allowUpdateDefault",
+                    ],
+                    (items) => applySettings(items),
+                );
+            }
+        });
     }
 
     return { init };

@@ -128,6 +128,31 @@ export function createUi(state) {
         setSubmissionStatus("", "");
     }
 
+    function updateRepoSummary(items) {
+        const summaryEl = $("repoSummary");
+        const branchEl = $("repoBranch");
+        if (!summaryEl) return;
+
+        const owner = items && items.github_owner ? items.github_owner : "";
+        const repo = items && items.github_repo ? items.github_repo : "";
+        const branch = items && items.github_branch ? items.github_branch : "";
+        const allowUpdate = !!(items && items.allowUpdateDefault);
+
+        if (!owner || !repo) {
+            summaryEl.textContent = "Not configured";
+            if (branchEl) branchEl.textContent = "";
+            return;
+        }
+
+        summaryEl.textContent = `${owner}/${repo}`;
+        if (branchEl) {
+            const parts = [];
+            if (branch) parts.push(`Branch: ${branch}`);
+            parts.push(allowUpdate ? "Overwrite enabled" : "Overwrite off");
+            branchEl.textContent = parts.join(" • ");
+        }
+    }
+
     function setAuthUi({ authenticated, tokenMasked }) {
         if (authenticated) {
             updateAuthStatus(`Signed in • ${tokenMasked || ""}`);
@@ -284,6 +309,63 @@ export function createUi(state) {
         });
     }
 
+    function promptMissingRepoSettings() {
+        return new Promise((resolve) => {
+            const existing = document.getElementById("cb-repo-settings-modal");
+            if (existing) existing.remove();
+
+            const overlay = document.createElement("div");
+            overlay.id = "cb-repo-settings-modal";
+            overlay.className = "cb-modal-overlay";
+
+            const card = document.createElement("div");
+            card.className = "cb-modal-card";
+
+            const title = document.createElement("div");
+            title.className = "cb-modal-title";
+            title.textContent = "Repository not configured";
+
+            const body = document.createElement("div");
+            body.className = "cb-modal-body";
+            body.textContent =
+                "Add your GitHub owner, repo, and branch in Settings before uploading.";
+
+            const actions = document.createElement("div");
+            actions.className = "cb-modal-actions";
+
+            const cancelBtn = document.createElement("button");
+            cancelBtn.type = "button";
+            cancelBtn.className = "btn secondary";
+            cancelBtn.textContent = "Cancel";
+
+            const openBtn = document.createElement("button");
+            openBtn.type = "button";
+            openBtn.className = "btn primary";
+            openBtn.textContent = "Open Settings";
+
+            function cleanup(action) {
+                try {
+                    overlay.remove();
+                } catch (e) {}
+                resolve(action);
+            }
+
+            cancelBtn.addEventListener("click", () => cleanup("cancel"));
+            openBtn.addEventListener("click", () => cleanup("open"));
+            overlay.addEventListener("click", (e) => {
+                if (e.target === overlay) cleanup("cancel");
+            });
+
+            actions.appendChild(cancelBtn);
+            actions.appendChild(openBtn);
+            card.appendChild(title);
+            card.appendChild(body);
+            card.appendChild(actions);
+            overlay.appendChild(card);
+            document.body.appendChild(overlay);
+        });
+    }
+
     return {
         updateStatus,
         updateAuthStatus,
@@ -295,8 +377,10 @@ export function createUi(state) {
         setSubmissionStatus,
         setSubmissionStatusLink,
         clearSubmissionStatus,
+        updateRepoSummary,
         setAuthUi,
         showMeta,
         promptCodeforcesSubmissionNotice,
+        promptMissingRepoSettings,
     };
 }

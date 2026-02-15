@@ -11,6 +11,14 @@ import { executeCodeExtraction } from "../../scrapers/leetcode.js";
 import { generateUploadFiles } from "../../utils/fileStrategies.js";
 import { TemplateManager } from "../../utils/templateManager.js";
 import { fillTemplate } from "../../utils/templateEngine.js";
+import {
+    handleSessionEvent,
+    handleGetSessionSettings,
+    handleSetSessionSettings,
+    handleGetSessions,
+    handleGetSession,
+    handleClearSessions,
+} from "../session/eventRouter.js";
 
 // ─────────────────────────────────────────────────────────────
 // Message Handlers
@@ -387,6 +395,30 @@ export function registerMessageHandlers() {
                         // This one is special - needs direct sendResponse for async
                         handleExecuteCodeExtraction(message, sender, sendResponse);
                         return; // Don't call sendResponse again
+
+                    case "sessionEvent":
+                        sendResponse(await handleSessionEvent(message));
+                        break;
+
+                    case "getSessionSettings":
+                        sendResponse(await handleGetSessionSettings());
+                        break;
+
+                    case "setSessionSettings":
+                        sendResponse(await handleSetSessionSettings(message));
+                        break;
+
+                    case "getSessions":
+                        sendResponse(await handleGetSessions());
+                        break;
+
+                    case "getSession":
+                        sendResponse(await handleGetSession(message));
+                        break;
+
+                    case "clearSessions":
+                        sendResponse(await handleClearSessions());
+                        break;
 
                     default:
                         sendResponse({ success: false, message: "Unknown action" });

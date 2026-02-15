@@ -1,0 +1,139 @@
+// content/adapters/leetcodeAdapter.js — Session tracking for LeetCode
+
+import { createAdapter, normalizeVerdict } from "./baseAdapter.js";
+
+const VERDICT_KEYWORDS = [
+    "Accepted",
+    "Wrong Answer",
+    "Time Limit Exceeded",
+    "Runtime Error",
+    "Compilation Error",
+    "Memory Limit Exceeded",
+    "Output Limit Exceeded",
+    "Presentation Error",
+];
+
+function extractSlugFromUrl(url) {
+    try {
+        const urlObj = new URL(url, location.origin);
+        const match = urlObj.pathname.match(/\/problems\/([^/]+)/i);
+        return match ? match[1] : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function extractDifficulty() {
+    const candidates = [
+        "[data-e2e-locator='difficulty']",
+        "[data-difficulty]",
+        "[class*='difficulty']",
+    ];
+
+    for (const selector of candidates) {
+        try {
+            const el = document.querySelector(selector);
+            if (el && el.textContent) {
+                const text = el.textContent.trim();
+                if (/^(Easy|Medium|Hard)$/i.test(text)) return text;
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    // Fallback: scan for exact difficulty labels in small text blocks
+    const nodes = Array.from(document.querySelectorAll("span, div"));
+    for (const node of nodes) {
+        const text = (node.textContent || "").trim();
+        if (/^(Easy|Medium|Hard)$/i.test(text)) return text;
+    }
+
+    return null;
+}
+
+function extractVerdictText() {
+    const direct =
+        document.querySelector("[data-e2e-locator='submission-result']") ||
+        document.querySelector("[data-testid='submission-result']") ||
+        document.querySelector(".result__title") ||
+        document.querySelector(".result__status");
+
+    if (direct && direct.textContent) {
+        const text = direct.textContent.trim();
+        if (text) return text;
+    }
+
+    const nodes = Array.from(document.querySelectorAll("span, div"));
+    for (const node of nodes) {
+        const text = (node.textContent || "").trim();
+        if (VERDICT_KEYWORDS.includes(text)) {
+            return text;
+        }
+    }
+
+    return null;
+}
+
+function extractLanguage() {
+    const direct =
+        document.querySelector("[data-e2e-locator='submission-language']") ||
+        document.querySelector("[data-testid='submission-language']") ||
+        document.querySelector(".submission-language");
+
+    if (direct && direct.textContent) {
+        return direct.textContent.trim();
+    }
+
+    const nodes = Array.from(document.querySelectorAll("span, div"));
+    for (const node of nodes) {
+        const text = (node.textContent || "").trim();
+        if (/^Language\s*:/i.test(text)) {
+            return text.replace(/^Language\s*:/i, "").trim();
+        }
+    }
+
+    return null;
+}
+
+function extractSubmissionData() {
+    const verdict = normalizeVerdict(extractVerdictText());
+    const language = extractLanguage();
+    if (!verdict && !language) return null;
+    return { verdict, language };
+}
+
+export const LeetCodeSessionAdapter = createAdapter({
+    platformKey: "leetcode",
+    matchesHostname: (hostname) => hostname.includes("leetcode.com"),
+    detectPageType: () => {
+        const path = location.pathname;
+        if (/\/problems\//i.test(path)) return "problem";
+        return "unknown";
+    },
+    extractProblemId: () => {
+        return extractSlugFromUrl(location.href);
+    },
+    getDifficulty: () => extractDifficulty(),
+    getSubmissionData: () => extractSubmissionData(),
+    observeSubmissionData: (callback) => {
+        const observer = new MutationObserver(() => {
+            const data = extractSubmissionData();
+            if (data && data.verdict) {
+                observer.disconnect();
+                callback(data);
+            }
+        });
+        observer.observe(document.documentElement || document.body, {
+            childList: true,
+            subtree: true,
+        });
+        return () => observer.disconnect();
+    },
+    getEditorSelectors: () => [
+        ".monaco-editor textarea",
+        ".CodeMirror textarea",
+        ".ace_editor textarea",
+        "textarea",
+    ],
+});

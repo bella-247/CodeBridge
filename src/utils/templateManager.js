@@ -13,15 +13,25 @@ export const TemplateManager = {
         if (!template) {
             // Default README fallback if no template provided
             const timeLine = data.solveTime ? `\n**Time:** ${data.solveTime}` : "";
+            const attemptsLine =
+                typeof data.attemptCount === "number"
+                    ? `\n**Attempts:** ${data.attemptCount}`
+                    : "";
             const desc = includeProblemStatement ? (data.description || data.contentHtml || "") : "";
             const problemSection = desc ? `\n\n## Problem\n\n${desc}` : "";
             const note = data.note ? `\n\n## Note\n\n${data.note}` : "";
-            return `# ${data.title}\n\n**Difficulty:** ${data.difficulty}${timeLine}\n\n**URL:** ${data.url}${problemSection}${note}`;
+            return `# ${data.title}\n\n**Difficulty:** ${data.difficulty}${timeLine}${attemptsLine}\n\n**URL:** ${data.url}${problemSection}${note}`;
         }
         const filled = fillTemplate(template, data);
         let result = filled;
         if (data.solveTime && !template.includes("[time]")) {
             result = `${result}\n\n**Time:** ${data.solveTime}`;
+        }
+        if (
+            typeof data.attemptCount === "number" &&
+            !template.includes("[attempts]")
+        ) {
+            result = `${result}\n\n**Attempts:** ${data.attemptCount}`;
         }
         if (includeProblemStatement && data.description && !template.includes("[description]")) {
             result = `${result}\n\n## Problem\n\n${data.description}`;
@@ -38,7 +48,16 @@ export const TemplateManager = {
     buildSolutionHeader(data, template, extension) {
         if (!template) return "";
 
-        const filled = fillTemplate(template, data);
+        let filled = fillTemplate(template, data);
+        if (data.solveTime && !template.includes("[time]")) {
+            filled = `${filled}\nTime: ${data.solveTime}`;
+        }
+        if (
+            typeof data.attemptCount === "number" &&
+            !template.includes("[attempts]")
+        ) {
+            filled = `${filled}\nAttempts: ${data.attemptCount}`;
+        }
         return formatAsComment(filled, extension);
     },
 

@@ -19,6 +19,20 @@
         location.hostname,
     );
 
+    // Initialize session tracker (non-blocking)
+    (async () => {
+        try {
+            const mod = await import(
+                chrome.runtime.getURL("src/content/sessionTracker.js"),
+            );
+            if (mod && mod.initSessionTracker) {
+                mod.initSessionTracker();
+            }
+        } catch (e) {
+            console.warn("[CodeBridge] Session tracker init failed", e);
+        }
+    })();
+
     // --- Constants and Maps ---
     const LANGUAGE_EXTENSION_MAP = {
         cpp: ".cpp",
@@ -59,6 +73,7 @@
     let _submissionObserver = null;
     let _showBubble = true;
     let _adapterPromise = null;
+    let _bubbleTemporarilyHidden = false;
     const ACCEPTED_RE = /\bAccepted\b/i;
 
     // --- Helper Functions ---
@@ -442,6 +457,7 @@
                 boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
                 border: "1px solid rgba(148,163,184,0.25)",
                 fontFamily: "Inter, sans-serif",
+                boxSizing: "border-box",
             });
 
             const title = document.createElement("div");
@@ -457,6 +473,7 @@
             input.placeholder = "e.g. 45 min";
             Object.assign(input.style, {
                 width: "100%",
+                maxWidth: "100%",
                 padding: "10px 12px",
                 borderRadius: "10px",
                 border: "1px solid rgba(148,163,184,0.35)",
@@ -465,6 +482,7 @@
                 outline: "none",
                 fontSize: "13px",
                 marginBottom: "10px",
+                boxSizing: "border-box",
             });
 
             const hint = document.createElement("div");
@@ -542,6 +560,7 @@
     }
 
     function ensureBubble() {
+        if (_bubbleTemporarilyHidden) return;
         if (document.getElementById("cb-bubble")) return;
         try {
             const bubble = document.createElement("div");
@@ -566,6 +585,30 @@
             });
             bubble.innerHTML =
                 '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L12 22"/><path d="M5 9L12 2L19 9"/></svg>';
+
+            const close = document.createElement("div");
+            close.textContent = "×";
+            Object.assign(close.style, {
+                position: "absolute",
+                top: "4px",
+                right: "4px",
+                width: "18px",
+                height: "18px",
+                borderRadius: "50%",
+                background: "rgba(0,0,0,0.35)",
+                color: "#fff",
+                fontSize: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+            });
+            close.addEventListener("click", (ev) => {
+                ev.stopPropagation();
+                bubble.style.display = "none";
+                _bubbleTemporarilyHidden = true;
+            });
+            bubble.appendChild(close);
 
             bubble.addEventListener(
                 "mouseenter",
@@ -615,6 +658,7 @@
             if (bubble) bubble.style.display = "none";
             return;
         }
+        if (_bubbleTemporarilyHidden) return;
         ensureBubble();
         const bubble = document.getElementById("cb-bubble");
         if (bubble) bubble.style.display = "flex";
