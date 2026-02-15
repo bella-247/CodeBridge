@@ -279,6 +279,44 @@
                     </div>
                 </div>
 
+                <div class="section-title">Data &amp; Backup</div>
+                <div class="glass-card">
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label>Export Backup</label>
+                            <button id="exportDataBtn" class="btn secondary">
+                                Download JSON
+                            </button>
+                            <div class="field-hint">
+                                Includes settings + sessions. GitHub token is excluded.
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Import Backup</label>
+                            <input
+                                id="importFile"
+                                type="file"
+                                class="file-input"
+                                accept="application/json"
+                            />
+                            <div class="checkbox-inline">
+                                <input
+                                    id="replaceSessions"
+                                    type="checkbox"
+                                    checked
+                                />
+                                <label for="replaceSessions">Replace sessions</label>
+                            </div>
+                            <button id="importDataBtn" class="btn secondary">
+                                Import JSON
+                            </button>
+                            <div class="field-hint warning">
+                                Importing can overwrite existing session data.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="section-title">Power User Templates</div>
 
                 <div class="glass-card template-field">

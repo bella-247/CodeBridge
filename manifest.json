@@ -57,7 +57,9 @@
                 "src/scrapers/codeforces.js",
                 "src/content/sessionTracker.js",
                 "src/content/adapters/*.js",
-                "src/shared/sessionDefaults.js"
+                "src/content/injected/*.js",
+                "src/shared/sessionDefaults.js",
+                "src/utils/constants.js"
             ],
             "matches": [
                 "https://leetcode.com/*",

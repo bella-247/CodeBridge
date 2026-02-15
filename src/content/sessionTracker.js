@@ -946,11 +946,23 @@ async function handlePage() {
     };
     document.addEventListener("keydown", activityHandler, true);
     document.addEventListener("mousedown", activityHandler, true);
+    document.addEventListener("pointerdown", activityHandler, true);
+    document.addEventListener("touchstart", activityHandler, true);
+    document.addEventListener("scroll", activityHandler, true);
+    document.addEventListener("wheel", activityHandler, true);
+    document.addEventListener("focusin", activityHandler, true);
+    document.addEventListener("input", activityHandler, true);
     document.addEventListener("visibilitychange", onVisibility);
 
     cleanupFns.push(() => {
         document.removeEventListener("keydown", activityHandler, true);
         document.removeEventListener("mousedown", activityHandler, true);
+        document.removeEventListener("pointerdown", activityHandler, true);
+        document.removeEventListener("touchstart", activityHandler, true);
+        document.removeEventListener("scroll", activityHandler, true);
+        document.removeEventListener("wheel", activityHandler, true);
+        document.removeEventListener("focusin", activityHandler, true);
+        document.removeEventListener("input", activityHandler, true);
         document.removeEventListener("visibilitychange", onVisibility);
     });
 

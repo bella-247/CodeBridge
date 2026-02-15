@@ -1,10 +1,8 @@
-// background/session/storageManager.js — Storage helpers for session tracking
+// background/session/storageManager.js — Storage helpers for session settings
 
-import { SESSION_DEFAULTS, SESSION_STORAGE_KEYS } from "../../shared/sessionDefaults.js";
+import { SESSION_DEFAULTS } from "../../shared/sessionDefaults.js";
 
-let _sessionsCache = null;
-
-function storageGet(keys) {
+export function storageGet(keys) {
     return new Promise((resolve) => {
         try {
             chrome.storage.local.get(keys, (items) => {
@@ -23,7 +21,7 @@ function storageGet(keys) {
     });
 }
 
-function storageSet(values) {
+export function storageSet(values) {
     return new Promise((resolve, reject) => {
         try {
             chrome.storage.local.set(values, () => {
@@ -37,6 +35,26 @@ function storageSet(values) {
             });
         } catch (e) {
             console.error("storageSet exception:", e);
+            reject(e);
+        }
+    });
+}
+
+export function storageRemove(keys) {
+    const payload = Array.isArray(keys) ? keys : [keys];
+    return new Promise((resolve, reject) => {
+        try {
+            chrome.storage.local.remove(payload, () => {
+                const err = chrome.runtime.lastError;
+                if (err) {
+                    console.error("storageRemove failed:", err);
+                    reject(err);
+                    return;
+                }
+                resolve();
+            });
+        } catch (e) {
+            console.error("storageRemove exception:", e);
             reject(e);
         }
     });
@@ -78,25 +96,4 @@ export async function setSessionSettings(partial) {
     }
 
     return getSessionSettings();
-}
-
-export async function loadSessions() {
-    if (_sessionsCache) return _sessionsCache;
-    const items = await storageGet([SESSION_STORAGE_KEYS.SESSIONS]);
-    const sessions = Array.isArray(items[SESSION_STORAGE_KEYS.SESSIONS])
-        ? items[SESSION_STORAGE_KEYS.SESSIONS]
-        : [];
-    _sessionsCache = sessions;
-    return sessions;
-}
-
-export async function saveSessions(sessions) {
-    const payload = Array.isArray(sessions) ? sessions : [];
-    _sessionsCache = payload;
-    await storageSet({ [SESSION_STORAGE_KEYS.SESSIONS]: payload });
-    return payload;
-}
-
-export function clearSessionsCache() {
-    _sessionsCache = null;
 }

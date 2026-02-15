@@ -125,10 +125,36 @@ export const LeetCodeSessionAdapter = createAdapter({
     getDifficulty: () => extractDifficulty(),
     getSubmissionData: () => extractSubmissionData(),
     observeSubmissionData: (callback) => {
+        // Inject interceptor
+        if (!document.getElementById("cb-leetcode-interceptor")) {
+            const script = document.createElement("script");
+            script.id = "cb-leetcode-interceptor";
+            script.src = chrome.runtime.getURL("src/content/injected/leetcode-interceptor.js");
+            (document.head || document.documentElement).appendChild(script);
+        }
+
+        const messageHandler = (event) => {
+            if (event.source !== window) return;
+            if (event.data && event.data.type === "CODEBRIDGE_LEETCODE_SUBMISSION") {
+                const payload = event.data.payload;
+                if (payload) {
+                    callback({
+                        verdict: normalizeVerdict(payload.status_msg),
+                        language: payload.lang,
+                        runtime: payload.status_runtime,
+                        memory: payload.status_memory,
+                        submissionId: payload.submission_id
+                    });
+                }
+            }
+        };
+
+        window.addEventListener("message", messageHandler);
+
+        // Fallback: DOM observer
         const observer = new MutationObserver(() => {
             const data = extractSubmissionData();
             if (data && data.verdict) {
-                observer.disconnect();
                 callback(data);
             }
         });
@@ -136,7 +162,11 @@ export const LeetCodeSessionAdapter = createAdapter({
             childList: true,
             subtree: true,
         });
-        return () => observer.disconnect();
+
+        return () => {
+            window.removeEventListener("message", messageHandler);
+            observer.disconnect();
+        };
     },
     isSuccessfulSubmission: (data) => {
         if (!data || !data.verdict) return false;

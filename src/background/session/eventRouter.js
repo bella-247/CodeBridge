@@ -1,8 +1,11 @@
 // background/session/eventRouter.js — Event processing for session tracking
 
-import { ensureSessionDefaults, getSessionSettings, setSessionSettings } from "./storageManager.js";
 import {
-    upsertSession,
+    ensureSessionDefaults,
+    getSessionSettings,
+    setSessionSettings,
+} from "./storageManager.js";
+import {
     startSessionTimer,
     stopSessionTimer,
     pauseSessionTimer,
@@ -13,11 +16,14 @@ import {
     getSessionByKey,
     clearAllSessions,
     isAcceptedVerdict,
+    touchSession,
 } from "./sessionManager.js";
 import { pruneSessions } from "./pruneManager.js";
+import { initSessionStore, replaceAllSessions, saveSessions } from "./sessionStore.js";
 
 export async function initSessionTracking() {
     await ensureSessionDefaults();
+    await initSessionStore();
     await pruneSessions();
 }
 
@@ -38,8 +44,6 @@ export async function handleSessionEvent(message) {
                 : null,
     };
 
-    await upsertSession(base);
-
     let updated = null;
     let shouldPrune = false;
 
@@ -49,6 +53,7 @@ export async function handleSessionEvent(message) {
                 platform,
                 problemId,
                 startedAt: event.startedAt || null,
+                difficulty: base.difficulty,
             });
             break;
         case "timer_stop":
@@ -56,6 +61,7 @@ export async function handleSessionEvent(message) {
                 platform,
                 problemId,
                 stoppedAt: event.stoppedAt || null,
+                reason: event.reason || event.stopReason || null,
             });
             shouldPrune = true;
             break;
@@ -91,6 +97,7 @@ export async function handleSessionEvent(message) {
                     typeof event.isSuccess === "boolean" ? event.isSuccess : null,
                 autoStop:
                     typeof event.autoStop === "boolean" ? event.autoStop : true,
+                difficulty: base.difficulty,
             });
             shouldPrune =
                 typeof event.isSuccess === "boolean"
@@ -99,7 +106,10 @@ export async function handleSessionEvent(message) {
             break;
         case "page_view":
         default:
-            updated = await getSessionByKey(platform, problemId);
+            updated = await touchSession(base);
+            if (!updated) {
+                updated = await getSessionByKey(platform, problemId);
+            }
             break;
     }
 
@@ -141,4 +151,17 @@ export async function handleGetSession(message) {
 export async function handleClearSessions() {
     await clearAllSessions();
     return { success: true };
+}
+
+export async function handleImportSessions(message) {
+    if (!message || !Array.isArray(message.sessions)) {
+        return { success: false, message: "Missing sessions payload" };
+    }
+    const mode = message.mode === "replace" ? "replace" : "merge";
+    if (mode === "replace") {
+        const saved = await replaceAllSessions(message.sessions);
+        return { success: true, imported: saved.length, mode };
+    }
+    const saved = await saveSessions(message.sessions);
+    return { success: true, imported: saved.length, mode };
 }

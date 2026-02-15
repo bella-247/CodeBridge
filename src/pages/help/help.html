@@ -29,29 +29,31 @@
         <section class="platform-card glass-card">
             <div class="platform-header">
                 <div class="platform-icon">🚀</div>
-                <h3>Quick Start</h3>
+                <h3>Quick Start (60 seconds)</h3>
             </div>
             <ul class="step-list">
-                <li class="step-item">1. Install the Code Bridge extension in your browser.</li>
+                <li class="step-item">1. Install the extension.</li>
                 <li class="step-item">2. Authenticate with GitHub via the popup.</li>
-                <li class="step-item">3. Open a supported platform (LeetCode, Codeforces, HackerRank) and start a problem.</li>
-                <li class="step-item">4. The timer will track your session automatically. Complete the problem to finish the session.</li>
+                <li class="step-item">3. Open a supported platform (LeetCode, Codeforces).</li>
+                <li class="step-item">4. Solve a problem.</li>
+                <li class="step-item">5. The timer tracks automatically. Accepted verdict ends the session.</li>
             </ul>
         </section>
 
-        <!-- How it Works -->
+        <!-- Conceptual Mental Model -->
         <section class="platform-card glass-card">
             <div class="platform-header">
                 <div class="platform-icon">🧠</div>
-                <h3>How Code Bridge Works</h3>
+                <h3>How Code Bridge Works (Conceptually)</h3>
             </div>
             <ul class="step-list">
-                <li class="step-item">Timer runs automatically for each problem you open.</li>
-                <li class="step-item">When your submission is Accepted, the session ends automatically.</li>
-                <li class="step-item">Your solution and metadata are saved locally (no cloud, no servers).</li>
-                <li class="step-item">Optional Auto-save pushes your solution to GitHub.</li>
-                <li class="step-item">Dashboard shows your stats, history, and allows exporting or clearing old sessions.</li>
+                <li class="step-item">1. You solve a problem.</li>
+                <li class="step-item">2. The timer runs in the background.</li>
+                <li class="step-item">3. When you get Accepted, the session ends.</li>
+                <li class="step-item">4. Your solution + metadata get saved locally.</li>
+                <li class="step-item">5. (Optional) Auto-save pushes it to GitHub.</li>
             </ul>
+            <p class="muted" style="margin-top: 10px">The timer automatically tracks your work per problem on each platform — even if you navigate between pages.</p>
         </section>
 
         <!-- Default Timer Settings -->
@@ -63,7 +65,7 @@
             <ul class="step-list">
                 <li class="step-item">• Mode: Delayed Auto (10s)</li>
                 <li class="step-item">• Session Retention: 90 days</li>
-                <li class="step-item">• Max Sessions Stored: 1000</li>
+                <li class="step-item">• Max Sessions Stored: 5000</li>
                 <li class="step-item">• Platforms: Codeforces, LeetCode, HackerRank</li>
             </ul>
         </section>
@@ -122,7 +124,7 @@
                 <li class="step-item">✓ Detects problem IDs (e.g., <code>1850A</code>).</li>
                 <li class="step-item">✓ Extracts difficulty scores (e.g., <code>*800</code>).</li>
                 <li class="step-item">✓ Works with Ace Editor used in submissions.</li>
-                <li class="step-item">✓ Open your accepted submission once to load your solution; future uploads are automatic.</li>
+                <li class="step-item">✓ On Codeforces, you must open your accepted submission page once so Code Bridge can read your code.</li>
             </ul>
             <p class="muted" style="margin-top: 10px">Tip: Click your accepted submission ID in the sidebar to open it manually.</p>
         </section>

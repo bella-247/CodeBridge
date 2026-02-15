@@ -4,8 +4,10 @@
 
 import { SUPPORTED_PLATFORMS } from "../../utils/constants.js";
 import { SESSION_DEFAULTS } from "../../shared/sessionDefaults.js";
+import { SESSION_EXPORT_VERSION } from "../../shared/sessionSchema.js";
 
 const $ = (id) => document.getElementById(id);
+const EXCLUDED_EXPORT_KEYS = new Set(["github_token", "device_flow_state"]);
 
 function loadOptions() {
     chrome.storage.local.get(
@@ -163,6 +165,110 @@ function loadOptions() {
     );
 }
 
+function sendMessage(action, payload = {}) {
+    return new Promise((resolve) => {
+        try {
+            chrome.runtime.sendMessage({ action, ...payload }, (resp) => {
+                if (chrome.runtime.lastError) {
+                    resolve({ success: false, message: chrome.runtime.lastError.message });
+                    return;
+                }
+                resolve(resp || { success: false, message: "No response" });
+            });
+        } catch (e) {
+            resolve({ success: false, message: e.message || String(e) });
+        }
+    });
+}
+
+function setStatus(message, tone = "accent") {
+    const status = $("status");
+    if (!status) return;
+    status.textContent = message || "";
+    if (!message) return;
+    status.style.color =
+        tone === "error" ? "var(--error)" : "var(--accent)";
+    setTimeout(() => {
+        if (status.textContent === message) status.textContent = "";
+    }, 4000);
+}
+
+async function exportData() {
+    const [settings, sessionsResp] = await Promise.all([
+        new Promise((resolve) => chrome.storage.local.get(null, (items) => resolve(items || {}))),
+        sendMessage("getSessions"),
+    ]);
+
+    const filteredSettings = Object.fromEntries(
+        Object.entries(settings).filter(([key]) => !EXCLUDED_EXPORT_KEYS.has(key)),
+    );
+
+    const sessions = sessionsResp && sessionsResp.success ? sessionsResp.sessions || [] : [];
+    const payload = {
+        formatVersion: SESSION_EXPORT_VERSION,
+        exportedAt: new Date().toISOString(),
+        settings: filteredSettings,
+        sessions,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `codebridge-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+
+    setStatus("Backup exported.", "accent");
+}
+
+async function importData() {
+    const fileInput = $("importFile");
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        setStatus("Select a backup file first.", "error");
+        return;
+    }
+
+    let parsed = null;
+    try {
+        const text = await fileInput.files[0].text();
+        parsed = JSON.parse(text);
+    } catch (err) {
+        setStatus("Invalid JSON file.", "error");
+        return;
+    }
+
+    if (
+        parsed &&
+        typeof parsed.formatVersion === "number" &&
+        parsed.formatVersion !== SESSION_EXPORT_VERSION
+    ) {
+        setStatus("Unsupported backup format version.", "error");
+        return;
+    }
+
+    const settings = parsed && parsed.settings ? parsed.settings : {};
+    if (settings.github_token) {
+        delete settings.github_token;
+    }
+
+    const sessions = Array.isArray(parsed && parsed.sessions) ? parsed.sessions : [];
+    const replace = $("replaceSessions") ? $("replaceSessions").checked : true;
+    const mode = replace ? "replace" : "merge";
+
+    await new Promise((resolve) => chrome.storage.local.set(settings, resolve));
+    const resp = await sendMessage("importSessions", { sessions, mode });
+
+    if (resp && resp.success) {
+        loadOptions();
+        setStatus(`Import completed (${resp.imported || 0} sessions).`, "accent");
+    } else {
+        setStatus(resp.message || "Import failed.", "error");
+    }
+}
+
 function saveOptions() {
     const owner = $("owner").value.trim();
     const repo = $("repo").value.trim();
@@ -266,10 +372,7 @@ function saveOptions() {
     };
 
     chrome.storage.local.set(toSave, () => {
-        const status = $("status");
-        status.textContent = "Configuration saved successfully!";
-        status.style.color = "var(--accent)";
-        setTimeout(() => (status.textContent = ""), 3000);
+        setStatus("Configuration saved successfully!", "accent");
     });
 }
 
@@ -287,15 +390,15 @@ function resetTemplates() {
     }
 }
 
-function clearExtensionStorage() {
-    if (
-        confirm("This will clear ALL settings and sign you out. Are you sure?")
-    ) {
-        chrome.storage.local.clear(() => {
-            alert("Storage cleared.");
-            location.reload();
-        });
+async function clearExtensionStorage() {
+    if (!confirm("This will clear ALL settings and sign you out. Are you sure?")) {
+        return;
     }
+    await sendMessage("clearSessions");
+    chrome.storage.local.clear(() => {
+        alert("Storage cleared.");
+        location.reload();
+    });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -303,4 +406,10 @@ document.addEventListener("DOMContentLoaded", () => {
     $("saveBtn").addEventListener("click", saveOptions);
     $("resetTemplates").addEventListener("click", resetTemplates);
     $("clearStorageBtn").addEventListener("click", clearExtensionStorage);
+    if ($("exportDataBtn")) {
+        $("exportDataBtn").addEventListener("click", exportData);
+    }
+    if ($("importDataBtn")) {
+        $("importDataBtn").addEventListener("click", importData);
+    }
 });
