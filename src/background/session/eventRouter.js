@@ -18,7 +18,7 @@ import {
     isAcceptedVerdict,
     touchSession,
 } from "./sessionManager.js";
-import { pruneSessions } from "./pruneManager.js";
+import { pruneSessions, trimSessionsToCount } from "./pruneManager.js";
 import { initSessionStore } from "./sessionStore.js";
 
 export async function initSessionTracking() {
@@ -127,7 +127,7 @@ export async function handleGetSessionSettings() {
 
 export async function handleSetSessionSettings(message) {
     if (!message || !message.settings) {
-        return { success: false, error: "Missing session settings" };
+        return { success: false, message: "Missing session settings" };
     }
     const settings = await setSessionSettings(message.settings);
     return { success: true, settings };
@@ -151,4 +151,16 @@ export async function handleGetSession(message) {
 export async function handleClearSessions() {
     await clearAllSessions();
     return { success: true };
+}
+
+export async function handleTrimSessions(message) {
+    const keepCount =
+        message && Number.isFinite(message.keepCount)
+            ? Math.max(0, message.keepCount)
+            : null;
+    if (keepCount === null) {
+        return { success: false, message: "Missing keepCount" };
+    }
+    const result = await trimSessionsToCount(keepCount);
+    return { success: true, ...result };
 }

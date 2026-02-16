@@ -43,6 +43,11 @@ export function openSessionDb() {
                 resolve(db);
             };
 
+            request.onblocked = () => {
+                dbPromise = null;
+                reject(new Error("IndexedDB open blocked by another connection"));
+            };
+
             request.onerror = () => {
                 reject(request.error || new Error("Failed to open sessions DB"));
             };

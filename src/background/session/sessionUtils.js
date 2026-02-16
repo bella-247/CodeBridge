@@ -71,7 +71,7 @@ export function mapStopReasonToStatus(reason, isSuccess = false) {
 
 export function inferStatus(session) {
     if (!session) return SESSION_STATUS.IDLE;
-    if (session.status && SESSION_STATUS[session.status]) {
+    if (session.status && Object.values(SESSION_STATUS).includes(session.status)) {
         return session.status;
     }
     if (session.endTime) {

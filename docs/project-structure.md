@@ -28,6 +28,8 @@ Top-level layout and the purpose of each directory.
 ## Source areas
 
 - src/background: service worker modules for auth, messaging, and GitHub uploads.
-- src/adapters: DOM adapters for each platform.
+- src/adapters: legacy DOM/platform adapters (deprecated). Platform-specific logic should move to src/content/adapters; legacy adapters are planned for removal after migration.
+- src/content: content script modules for session tracking orchestration.
+- src/content/adapters: new session adapters that replace legacy platform adapters.
 - src/scrapers: fetch-and-parse logic for pages like Codeforces submissions.
 - src/utils: template rendering and file strategy helpers.

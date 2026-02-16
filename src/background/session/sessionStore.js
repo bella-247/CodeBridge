@@ -159,7 +159,10 @@ function buildLegacySessionId(session) {
         session.problemId || "unknown",
         session.firstSeen || session.startTime || session.lastUpdated || "0",
     ].join(":");
-    return base;
+    const suffix = session && session.id
+        ? String(session.id)
+        : Math.random().toString(36).slice(2, 8);
+    return `${base}:${suffix}`;
 }
 
 function normalizeLegacySession(legacy) {

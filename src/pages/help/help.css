@@ -49,7 +49,7 @@ body {
     right: -20%;
     width: 200px;
     height: 200px;
-    background: var(--primary, #4fc3f7);
+    background: var(--primary, #59d1ff);
     opacity: 0.05;
     border-radius: 50%;
     filter: blur(80px);
@@ -96,7 +96,7 @@ body {
 }
 
 .step-num {
-    color: var(--primary, #4fc3f7);
+    color: var(--primary, #59d1ff);
     font-weight: 700;
     min-width: 20px;
 }
