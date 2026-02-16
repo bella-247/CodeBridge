@@ -11,6 +11,36 @@ body {
     gap: 16px;
 }
 
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.input-group label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-main);
+}
+
+.input-group select,
+.input-group input,
+.input-group textarea {
+    min-height: 38px;
+}
+
+.input-group select {
+    cursor: pointer;
+}
+
 .repo-card {
     padding: 12px 14px;
 }
@@ -49,7 +79,7 @@ body {
 .field-hint {
     font-size: 11px;
     color: var(--text-muted);
-    margin: 10px 0 8px;
+    margin: 8px 0 4px;
 }
 
 .advanced-section {
@@ -58,6 +88,12 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.06);
     background: rgba(255, 255, 255, 0.02);
     padding: 8px 10px;
+}
+
+@media (max-width: 360px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .advanced-section summary {
@@ -355,4 +391,66 @@ code {
 .cb-modal-actions .btn {
     padding: 8px 12px;
     font-size: 12px;
+}
+
+/* Timer */
+.timer-display {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.timer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.timer-row:last-child {
+    margin-bottom: 0;
+}
+
+.timer-val {
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 600;
+    color: var(--text-main);
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+}
+
+.timer-val.big-time {
+    font-size: 20px;
+    color: var(--primary);
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+    margin: 4px 0;
+}
+
+.timer-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn.small {
+    padding: 6px 12px;
+    font-size: 11px;
+    height: auto;
+}
+
+.btn.danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.btn.danger:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.5);
 }

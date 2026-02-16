@@ -139,7 +139,7 @@
                             <label>Timer Mode</label>
                             <select id="timerStartMode">
                                 <option value="DELAYED_AUTO">
-                                    Delayed Auto (10s)
+                                    Delayed Auto
                                 </option>
                                 <option value="TYPING">Typing</option>
                                 <option value="MANUAL">Manual</option>
@@ -181,21 +181,8 @@
                     <div class="form-grid" style="margin-top: 12px">
                         <div class="input-group">
                             <label>Platforms Enabled</label>
-                            <div class="checkbox-group">
-                                <label class="checkbox-row">
-                                    <input
-                                        id="platformCodeforces"
-                                        type="checkbox"
-                                    />
-                                    Codeforces
-                                </label>
-                                <label class="checkbox-row">
-                                    <input
-                                        id="platformLeetCode"
-                                        type="checkbox"
-                                    />
-                                    LeetCode
-                                </label>
+                            <div id="platformsContainer" class="checkbox-group">
+                                <!-- Dynamically populated -->
                             </div>
                         </div>
                         <div class="input-group">
@@ -223,6 +210,121 @@
                                 <option value="medium">Medium</option>
                                 <option value="large">Large</option>
                             </select>
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label>Auto Stop on Accepted</label>
+                            <div class="checkbox-inline">
+                                <input id="autoStopOnAccepted" type="checkbox" />
+                                <label
+                                    for="autoStopOnAccepted"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Stop when accepted
+                                </label>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Auto Stop on Problem Switch</label>
+                            <div class="checkbox-inline">
+                                <input
+                                    id="autoStopOnProblemSwitch"
+                                    type="checkbox"
+                                />
+                                <label
+                                    for="autoStopOnProblemSwitch"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Stop previous session
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label>Inactivity Timeout (min)</label>
+                            <input
+                                id="inactivityTimeout"
+                                type="number"
+                                min="0"
+                                step="1"
+                                placeholder="30"
+                            />
+                        </div>
+                        <div class="input-group">
+                            <label>Allow Manual Stop</label>
+                            <div class="checkbox-inline">
+                                <input id="allowManualStop" type="checkbox" />
+                                <label
+                                    for="allowManualStop"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Show end button
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title">Data &amp; Backup</div>
+                <div class="glass-card">
+                    <div class="card-title">Settings (JSON)</div>
+                    <div class="card-subtitle">
+                        Import or export configuration only. Sessions are not included.
+                    </div>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label>Export Settings</label>
+                            <button id="exportSettingsBtn" class="btn secondary">
+                                Download JSON
+                            </button>
+                        </div>
+                        <div class="input-group">
+                            <label>Import Settings</label>
+                            <input
+                                id="importSettingsFile"
+                                type="file"
+                                class="file-input"
+                                accept="application/json"
+                            />
+                            <button id="importSettingsBtn" class="btn secondary">
+                                Import JSON
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card">
+                    <div class="card-title">User Data Export</div>
+                    <div class="card-subtitle">
+                        Export session data for the dashboard. Import is not available.
+                    </div>
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label>Format</label>
+                            <select id="userDataFormat">
+                                <option value="json">JSON</option>
+                                <option value="csv">CSV</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Export Sessions</label>
+                            <button id="exportUserDataBtn" class="btn secondary">
+                                Download
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -310,6 +412,6 @@
                 </div>
             </main>
         </div>
-        <script src="options.js"></script>
+        <script type="module" src="options.js"></script>
     </body>
 </html>

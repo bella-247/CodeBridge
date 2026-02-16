@@ -1,8 +1,11 @@
 // background/session/eventRouter.js — Event processing for session tracking
 
-import { ensureSessionDefaults, getSessionSettings, setSessionSettings } from "./storageManager.js";
 import {
-    upsertSession,
+    ensureSessionDefaults,
+    getSessionSettings,
+    setSessionSettings,
+} from "./storageManager.js";
+import {
     startSessionTimer,
     stopSessionTimer,
     pauseSessionTimer,
@@ -13,11 +16,14 @@ import {
     getSessionByKey,
     clearAllSessions,
     isAcceptedVerdict,
+    touchSession,
 } from "./sessionManager.js";
 import { pruneSessions } from "./pruneManager.js";
+import { initSessionStore } from "./sessionStore.js";
 
 export async function initSessionTracking() {
     await ensureSessionDefaults();
+    await initSessionStore();
     await pruneSessions();
 }
 
@@ -38,8 +44,6 @@ export async function handleSessionEvent(message) {
                 : null,
     };
 
-    await upsertSession(base);
-
     let updated = null;
     let shouldPrune = false;
 
@@ -49,6 +53,7 @@ export async function handleSessionEvent(message) {
                 platform,
                 problemId,
                 startedAt: event.startedAt || null,
+                difficulty: base.difficulty,
             });
             break;
         case "timer_stop":
@@ -56,6 +61,7 @@ export async function handleSessionEvent(message) {
                 platform,
                 problemId,
                 stoppedAt: event.stoppedAt || null,
+                reason: event.reason || event.stopReason || null,
             });
             shouldPrune = true;
             break;
@@ -87,12 +93,23 @@ export async function handleSessionEvent(message) {
                 language: event.language || null,
                 submissionId: event.submissionId || null,
                 submittedAt: event.submittedAt || null,
+                isSuccess:
+                    typeof event.isSuccess === "boolean" ? event.isSuccess : null,
+                autoStop:
+                    typeof event.autoStop === "boolean" ? event.autoStop : true,
+                difficulty: base.difficulty,
             });
-            shouldPrune = isAcceptedVerdict(event.verdict);
+            shouldPrune =
+                typeof event.isSuccess === "boolean"
+                    ? event.isSuccess
+                    : isAcceptedVerdict(event.verdict);
             break;
         case "page_view":
         default:
-            updated = await getSessionByKey(platform, problemId);
+            updated = await touchSession(base);
+            if (!updated) {
+                updated = await getSessionByKey(platform, problemId);
+            }
             break;
     }
 
@@ -109,7 +126,10 @@ export async function handleGetSessionSettings() {
 }
 
 export async function handleSetSessionSettings(message) {
-    const settings = await setSessionSettings(message && message.settings ? message.settings : {});
+    if (!message || !message.settings) {
+        return { success: false, error: "Missing session settings" };
+    }
+    const settings = await setSessionSettings(message.settings);
     return { success: true, settings };
 }
 

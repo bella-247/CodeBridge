@@ -31,6 +31,7 @@ Full documentation is in docs/:
 - docs/development.md
 - docs/security-privacy.md
 - docs/troubleshooting.md
+- docs/decisions.md (Architecture Decisions Log)
 
 ## Codeforces note
 

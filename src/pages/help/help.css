@@ -1,11 +1,24 @@
 body {
     width: 100vw;
     min-height: 100vh;
-    background: #0a0a0c;
+    background:
+        radial-gradient(
+            1100px 600px at 12% -10%,
+            rgba(89, 209, 255, 0.18),
+            transparent 60%
+        ),
+        radial-gradient(
+            900px 500px at 90% 12%,
+            rgba(255, 122, 89, 0.14),
+            transparent 55%
+        ),
+        #0a0a0c;
     margin: 0;
     padding: 40px 20px;
     box-sizing: border-box;
-    font-family: "Inter", sans-serif;
+    font-family: "Space Grotesk", "Segoe UI", "Helvetica Neue", sans-serif;
+    --primary: #59d1ff;
+    --accent: #ff7a59;
 }
 
 .help-container {
@@ -26,6 +39,7 @@ body {
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(255, 255, 255, 0.05);
+    animation: fade-up 0.6s ease both;
 }
 
 .platform-card::after {
@@ -104,7 +118,7 @@ body {
 .feature-item h4 {
     margin: 0 0 8px 0;
     font-size: 14px;
-    color: #4fc3f7;
+    color: var(--primary, #59d1ff);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -121,9 +135,20 @@ code {
     border-radius: 4px;
     font-family: "JetBrains Mono", monospace;
     font-size: 13px;
-    color: #4fc3f7;
+    color: var(--primary, #59d1ff);
 }
 
 .muted {
     color: rgba(255, 255, 255, 0.6);
+}
+
+@keyframes fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }

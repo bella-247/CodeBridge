@@ -165,6 +165,11 @@ export const CodeforcesSessionAdapter = createAdapter({
         });
         return () => observer.disconnect();
     },
+    isSuccessfulSubmission: (data) => {
+        if (!data || !data.verdict) return false;
+        const verdict = String(data.verdict).trim().toLowerCase();
+        return verdict === "ok" || verdict === "accepted" || verdict === "ac";
+    },
     getEditorSelectors: () => [
         "textarea#source",
         "textarea[name='source']",

@@ -55,6 +55,7 @@ export function initPopup() {
     actions.autoDetectOnOpen();
     actions.initAuthStatus();
     chrome.runtime.onMessage.addListener(actions.handleBackgroundMessage);
+
 }
 
 function bindUiEvents(actions, ui) {

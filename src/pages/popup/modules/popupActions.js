@@ -21,10 +21,8 @@ export function createActions({ state, ui, getFormValues }) {
 
     function getSkipSubmissionPromptSetting() {
         return new Promise((resolve) => {
-            chrome.storage.local.get(
-                [CF_SUBMISSION_PROMPT_KEY],
-                (items) =>
-                    resolve(!!items[CF_SUBMISSION_PROMPT_KEY]),
+            chrome.storage.local.get([CF_SUBMISSION_PROMPT_KEY], (items) =>
+                resolve(!!items[CF_SUBMISSION_PROMPT_KEY]),
             );
         });
     }
@@ -72,7 +70,10 @@ export function createActions({ state, ui, getFormValues }) {
         let didRespond = false;
         const timeoutId = setTimeout(() => {
             if (!didRespond) {
-                ui.updateStatus("No response from background. Try again.", true);
+                ui.updateStatus(
+                    "No response from background. Try again.",
+                    true,
+                );
                 ui.setSignInEnabled(true);
                 ui.clearDeviceInfo();
             }
@@ -114,7 +115,10 @@ export function createActions({ state, ui, getFormValues }) {
                         "";
                     if (url) {
                         try {
-                            chrome.tabs.create({ url, active: false }, () => {});
+                            chrome.tabs.create(
+                                { url, active: false },
+                                () => {},
+                            );
                         } catch (e) {
                             // ignore
                         }
@@ -156,7 +160,9 @@ export function createActions({ state, ui, getFormValues }) {
 
             const isSupportedUrl = (url) => {
                 if (!url) return false;
-                return /leetcode\.com|codeforces\.com|hackerrank\.com/i.test(url);
+                return /leetcode\.com|codeforces\.com|hackerrank\.com/i.test(
+                    url,
+                );
             };
 
             const sendProblemRequest = () =>
@@ -167,17 +173,13 @@ export function createActions({ state, ui, getFormValues }) {
                     if (isCodeforcesTab) {
                         payload.options = { skipSolutionFetch: true };
                     }
-                    chrome.tabs.sendMessage(
-                        tabId,
-                        payload,
-                        (response) => {
-                            if (chrome.runtime.lastError) {
-                                resolve({ error: chrome.runtime.lastError });
-                            } else {
-                                resolve({ response });
-                            }
-                        },
-                    );
+                    chrome.tabs.sendMessage(tabId, payload, (response) => {
+                        if (chrome.runtime.lastError) {
+                            resolve({ error: chrome.runtime.lastError });
+                        } else {
+                            resolve({ response });
+                        }
+                    });
                 });
 
             const injectContentScript = () =>
@@ -329,9 +331,15 @@ export function createActions({ state, ui, getFormValues }) {
             const choice = await ui.promptMissingRepoSettings();
             if (choice === "open") {
                 chrome.tabs.create({
-                    url: chrome.runtime.getURL("src/pages/options/options.html"),
+                    url: chrome.runtime.getURL(
+                        "src/pages/options/options.html",
+                    ),
                 });
             }
+            ui.updateStatus(
+                "GitHub owner/repo not configured — save canceled.",
+                true,
+            );
             return;
         }
 
@@ -399,7 +407,8 @@ export function createActions({ state, ui, getFormValues }) {
                             : null;
                     if (copyAfter) {
                         const urlToCopy =
-                            uploadedUrl || `https://github.com/${owner}/${repo}`;
+                            uploadedUrl ||
+                            `https://github.com/${owner}/${repo}`;
                         copyTextToClipboard(urlToCopy).then((ok) => {
                             ui.updateStatus(
                                 ok
@@ -411,7 +420,8 @@ export function createActions({ state, ui, getFormValues }) {
                     } else {
                         ui.updateStatus("Upload succeeded");
                     }
-                    if (state.lastProblemData) ui.showMeta(state.lastProblemData);
+                    if (state.lastProblemData)
+                        ui.showMeta(state.lastProblemData);
                 } else {
                     ui.updateStatus(
                         "Upload failed: " + (resp.message || "unknown"),
@@ -464,7 +474,10 @@ export function createActions({ state, ui, getFormValues }) {
                         ui.clearSubmissionStatus();
                         return;
                     }
-                    if (state.lastProblemData && state.lastProblemData.id === data.id) {
+                    if (
+                        state.lastProblemData &&
+                        state.lastProblemData.id === data.id
+                    ) {
                         if (resp && resp.success && resp.exists) {
                             const url =
                                 resp && resp.path
@@ -498,7 +511,10 @@ export function createActions({ state, ui, getFormValues }) {
                 try {
                     onDetect();
                 } catch (e) {
-                    console.warn("auto-detect after auth failed", e && e.message);
+                    console.warn(
+                        "auto-detect after auth failed",
+                        e && e.message,
+                    );
                 }
             }
         });

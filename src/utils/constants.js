@@ -31,3 +31,27 @@ export const PLATFORM_NAMES = {
     CODEFORCES: "Codeforces",
     HACKERRANK: "HackerRank"
 };
+
+export const SUPPORTED_PLATFORMS = [
+    {
+        key: "leetcode",
+        name: "LeetCode",
+        hostPattern: "leetcode.com",
+        adapterModule: "src/content/adapters/leetcodeAdapter.js",
+        adapterExport: "LeetCodeSessionAdapter"
+    },
+    {
+        key: "codeforces",
+        name: "Codeforces",
+        hostPattern: "codeforces.com",
+        adapterModule: "src/content/adapters/codeforcesAdapter.js",
+        adapterExport: "CodeforcesSessionAdapter"
+    },
+    {
+        key: "hackerrank",
+        name: "HackerRank",
+        hostPattern: "hackerrank.com",
+        adapterModule: "src/content/adapters/hackerrankAdapter.js",
+        adapterExport: "HackerRankSessionAdapter"
+    }
+];

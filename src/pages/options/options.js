@@ -2,17 +2,47 @@
  * options.js - Configuration management for CodeBridge
  */
 
-const $ = (id) => document.getElementById(id);
+import { SUPPORTED_PLATFORMS } from "../../utils/constants.js";
+import { SESSION_DEFAULTS } from "../../shared/sessionDefaults.js";
 
-const SESSION_DEFAULTS = {
-    SESSION_PRUNE_DAYS: 90,
-    MAX_SESSIONS_STORED: 1000,
-    TIMER_START_MODE: "DELAYED_AUTO",
-    AUTO_START_DELAY_SECONDS: 10,
-    SUPPORTED_PLATFORMS_ENABLED: ["codeforces", "leetcode"],
-    SHOW_TIMER_OVERLAY: true,
-    TIMER_OVERLAY_SIZE: "medium",
-};
+const $ = (id) => document.getElementById(id);
+const SETTINGS_EXPORT_KEYS = new Set([
+    "github_owner",
+    "github_repo",
+    "github_branch",
+    "github_language",
+    "github_file_structure",
+    "template_commit",
+    "template_path",
+    "template_readme",
+    "template_solution",
+    "includeProblemStatement",
+    "allowUpdateDefault",
+    "showBubble",
+    "autoSave",
+    ...Object.keys(SESSION_DEFAULTS),
+]);
+
+const EXCLUDED_EXPORT_KEYS = new Set(["github_token", "device_flow_state"]);
+
+const SETTINGS_EXPORT_FORMAT = "codebridge-settings";
+const SETTINGS_EXPORT_VERSION = 1;
+
+const USER_DATA_EXPORT_FORMAT = "codebridge-user-data";
+const USER_DATA_EXPORT_VERSION = 1;
+
+function updateDelayedAutoLabel() {
+    const option = document.querySelector(
+        "#timerStartMode option[value='DELAYED_AUTO']",
+    );
+    if (!option) return;
+    const delayEl = $("autoStartDelay");
+    const raw = delayEl ? parseInt(delayEl.value, 10) : NaN;
+    const delay = Number.isFinite(raw)
+        ? Math.max(0, raw)
+        : SESSION_DEFAULTS.AUTO_START_DELAY_SECONDS;
+    option.textContent = `Delayed Auto (${delay}s)`;
+}
 
 function loadOptions() {
     chrome.storage.local.get(
@@ -34,6 +64,10 @@ function loadOptions() {
             "SUPPORTED_PLATFORMS_ENABLED",
             "SHOW_TIMER_OVERLAY",
             "TIMER_OVERLAY_SIZE",
+            "AUTO_STOP_ON_ACCEPTED",
+            "AUTO_STOP_ON_PROBLEM_SWITCH",
+            "INACTIVITY_TIMEOUT_MINUTES",
+            "ALLOW_MANUAL_STOP",
         ],
         (items) => {
             if (items) {
@@ -65,7 +99,8 @@ function loadOptions() {
                     typeof items.allowUpdateDefault !== "undefined" &&
                     $("allowUpdateDefault")
                 ) {
-                    $("allowUpdateDefault").checked = !!items.allowUpdateDefault;
+                    $("allowUpdateDefault").checked =
+                        !!items.allowUpdateDefault;
                 }
 
                 if (
@@ -104,28 +139,99 @@ function loadOptions() {
                     typeof items.TIMER_OVERLAY_SIZE === "string"
                         ? items.TIMER_OVERLAY_SIZE
                         : SESSION_DEFAULTS.TIMER_OVERLAY_SIZE;
+                const autoStopOnAccepted =
+                    typeof items.AUTO_STOP_ON_ACCEPTED === "boolean"
+                        ? items.AUTO_STOP_ON_ACCEPTED
+                        : SESSION_DEFAULTS.AUTO_STOP_ON_ACCEPTED;
+                const autoStopOnProblemSwitch =
+                    typeof items.AUTO_STOP_ON_PROBLEM_SWITCH === "boolean"
+                        ? items.AUTO_STOP_ON_PROBLEM_SWITCH
+                        : SESSION_DEFAULTS.AUTO_STOP_ON_PROBLEM_SWITCH;
+                const allowManualStop =
+                    typeof items.ALLOW_MANUAL_STOP === "boolean"
+                        ? items.ALLOW_MANUAL_STOP
+                        : SESSION_DEFAULTS.ALLOW_MANUAL_STOP;
+                const inactivityTimeout =
+                    typeof items.INACTIVITY_TIMEOUT_MINUTES === "number"
+                        ? items.INACTIVITY_TIMEOUT_MINUTES
+                        : SESSION_DEFAULTS.INACTIVITY_TIMEOUT_MINUTES;
 
                 if ($("sessionPruneDays"))
                     $("sessionPruneDays").value = String(pruneDays);
                 if ($("maxSessionsStored"))
                     $("maxSessionsStored").value = String(maxSessions);
-                if ($("timerStartMode"))
-                    $("timerStartMode").value = timerMode;
+                if ($("timerStartMode")) $("timerStartMode").value = timerMode;
                 if ($("autoStartDelay"))
                     $("autoStartDelay").value = String(autoDelay);
-                if ($("platformCodeforces"))
-                    $("platformCodeforces").checked =
-                        platforms.includes("codeforces");
-                if ($("platformLeetCode"))
-                    $("platformLeetCode").checked =
-                        platforms.includes("leetcode");
+                updateDelayedAutoLabel();
+
+                // Dynamic Platform List
+                const container = $("platformsContainer");
+                if (container) {
+                    container.innerHTML = "";
+                    SUPPORTED_PLATFORMS.forEach((platform) => {
+                        const label = document.createElement("label");
+                        label.className = "checkbox-row";
+
+                        const input = document.createElement("input");
+                        input.type = "checkbox";
+                        input.id = `platform_${platform.key}`;
+                        input.checked = platforms.includes(platform.key);
+
+                        label.appendChild(input);
+                        label.appendChild(
+                            document.createTextNode(" " + platform.name),
+                        );
+                        container.appendChild(label);
+                    });
+                }
+
                 if ($("showTimerOverlay"))
                     $("showTimerOverlay").checked = !!showTimerOverlay;
                 if ($("timerOverlaySize"))
                     $("timerOverlaySize").value = timerOverlaySize;
+                if ($("autoStopOnAccepted"))
+                    $("autoStopOnAccepted").checked = !!autoStopOnAccepted;
+                if ($("autoStopOnProblemSwitch"))
+                    $("autoStopOnProblemSwitch").checked =
+                        !!autoStopOnProblemSwitch;
+                if ($("allowManualStop"))
+                    $("allowManualStop").checked = !!allowManualStop;
+                if ($("inactivityTimeout"))
+                    $("inactivityTimeout").value = String(inactivityTimeout);
             }
         },
     );
+}
+
+function sendMessage(action, payload = {}) {
+    return new Promise((resolve) => {
+        try {
+            chrome.runtime.sendMessage({ action, ...payload }, (resp) => {
+                if (chrome.runtime.lastError) {
+                    resolve({
+                        success: false,
+                        message: chrome.runtime.lastError.message,
+                    });
+                    return;
+                }
+                resolve(resp || { success: false, message: "No response" });
+            });
+        } catch (e) {
+            resolve({ success: false, message: e.message || String(e) });
+        }
+    });
+}
+
+function setStatus(message, tone = "accent") {
+    const status = $("status");
+    if (!status) return;
+    status.textContent = message || "";
+    if (!message) return;
+    status.style.color = tone === "error" ? "var(--error)" : "var(--accent)";
+    setTimeout(() => {
+        if (status.textContent === message) status.textContent = "";
+    }, 4000);
 }
 
 function saveOptions() {
@@ -163,12 +269,13 @@ function saveOptions() {
         : SESSION_DEFAULTS.MAX_SESSIONS_STORED;
 
     const platformsEnabled = [];
-    if ($("platformCodeforces") && $("platformCodeforces").checked) {
-        platformsEnabled.push("codeforces");
-    }
-    if ($("platformLeetCode") && $("platformLeetCode").checked) {
-        platformsEnabled.push("leetcode");
-    }
+    SUPPORTED_PLATFORMS.forEach((platform) => {
+        const el = $(`platform_${platform.key}`);
+        if (el && el.checked) {
+            platformsEnabled.push(platform.key);
+        }
+    });
+
     const showTimerOverlay = $("showTimerOverlay")
         ? $("showTimerOverlay").checked
         : SESSION_DEFAULTS.SHOW_TIMER_OVERLAY;
@@ -179,6 +286,18 @@ function saveOptions() {
     const timerOverlaySize = allowedSizes.includes(timerOverlaySizeRaw)
         ? timerOverlaySizeRaw
         : SESSION_DEFAULTS.TIMER_OVERLAY_SIZE;
+    const autoStopOnAccepted = $("autoStopOnAccepted")
+        ? $("autoStopOnAccepted").checked
+        : SESSION_DEFAULTS.AUTO_STOP_ON_ACCEPTED;
+    const autoStopOnProblemSwitch = $("autoStopOnProblemSwitch")
+        ? $("autoStopOnProblemSwitch").checked
+        : SESSION_DEFAULTS.AUTO_STOP_ON_PROBLEM_SWITCH;
+    const allowManualStop = $("allowManualStop")
+        ? $("allowManualStop").checked
+        : SESSION_DEFAULTS.ALLOW_MANUAL_STOP;
+    const inactivityTimeoutRaw = $("inactivityTimeout")
+        ? parseInt($("inactivityTimeout").value, 10)
+        : SESSION_DEFAULTS.INACTIVITY_TIMEOUT_MINUTES;
 
     const autoStartDelay = Number.isFinite(autoStartDelayRaw)
         ? Math.max(0, autoStartDelayRaw)
@@ -189,6 +308,9 @@ function saveOptions() {
     const maxSessionsStored = Number.isFinite(maxSessionsRaw)
         ? Math.max(1, maxSessionsRaw)
         : SESSION_DEFAULTS.MAX_SESSIONS_STORED;
+    const inactivityTimeoutMinutes = Number.isFinite(inactivityTimeoutRaw)
+        ? Math.max(0, inactivityTimeoutRaw)
+        : SESSION_DEFAULTS.INACTIVITY_TIMEOUT_MINUTES;
 
     const toSave = {
         github_owner: owner,
@@ -205,18 +327,17 @@ function saveOptions() {
         AUTO_START_DELAY_SECONDS: autoStartDelay,
         SESSION_PRUNE_DAYS: sessionPruneDays,
         MAX_SESSIONS_STORED: maxSessionsStored,
-        SUPPORTED_PLATFORMS_ENABLED: platformsEnabled.length
-            ? platformsEnabled
-            : SESSION_DEFAULTS.SUPPORTED_PLATFORMS_ENABLED,
+        SUPPORTED_PLATFORMS_ENABLED: platformsEnabled,
         SHOW_TIMER_OVERLAY: !!showTimerOverlay,
         TIMER_OVERLAY_SIZE: timerOverlaySize,
+        AUTO_STOP_ON_ACCEPTED: !!autoStopOnAccepted,
+        AUTO_STOP_ON_PROBLEM_SWITCH: !!autoStopOnProblemSwitch,
+        ALLOW_MANUAL_STOP: !!allowManualStop,
+        INACTIVITY_TIMEOUT_MINUTES: inactivityTimeoutMinutes,
     };
 
     chrome.storage.local.set(toSave, () => {
-        const status = $("status");
-        status.textContent = "Configuration saved successfully!";
-        status.style.color = "var(--accent)";
-        setTimeout(() => (status.textContent = ""), 3000);
+        setStatus("Configuration saved successfully!", "accent");
     });
 }
 
@@ -234,15 +355,207 @@ function resetTemplates() {
     }
 }
 
-function clearExtensionStorage() {
-    if (
-        confirm("This will clear ALL settings and sign you out. Are you sure?")
-    ) {
-        chrome.storage.local.clear(() => {
-            alert("Storage cleared.");
-            location.reload();
-        });
+function pickSettings(items) {
+    const output = {};
+    SETTINGS_EXPORT_KEYS.forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(items, key)) {
+            output[key] = items[key];
+        }
+    });
+    return output;
+}
+
+async function exportSettings() {
+    const settings = await new Promise((resolve) =>
+        chrome.storage.local.get(Array.from(SETTINGS_EXPORT_KEYS), (items) =>
+            resolve(items || {}),
+        ),
+    );
+
+    const payload = {
+        format: SETTINGS_EXPORT_FORMAT,
+        version: SETTINGS_EXPORT_VERSION,
+        exportedAt: new Date().toISOString(),
+        settings: pickSettings(settings),
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `codebridge-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 800);
+    setStatus("Settings exported.", "accent");
+}
+
+async function importSettings() {
+    const fileInput = $("importSettingsFile");
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        setStatus("Select a settings file first.", "error");
+        return;
     }
+
+    let parsed = null;
+    try {
+        const text = await fileInput.files[0].text();
+        parsed = JSON.parse(text);
+    } catch (err) {
+        setStatus("Invalid JSON file.", "error");
+        return;
+    }
+
+    if (parsed && parsed.format && parsed.format !== SETTINGS_EXPORT_FORMAT) {
+        setStatus("Unsupported settings format.", "error");
+        return;
+    }
+
+    const settingsPayload =
+        parsed && typeof parsed === "object"
+            ? parsed.settings && typeof parsed.settings === "object"
+                ? parsed.settings
+                : parsed
+            : null;
+
+    if (!settingsPayload || typeof settingsPayload !== "object") {
+        setStatus("No settings found in file.", "error");
+        return;
+    }
+
+    const sanitized = { ...settingsPayload };
+    EXCLUDED_EXPORT_KEYS.forEach((key) => {
+        if (key in sanitized) {
+            delete sanitized[key];
+        }
+    });
+    const toSave = pickSettings(sanitized);
+    if (!Object.keys(toSave).length) {
+        setStatus("No valid settings found to import.", "error");
+        return;
+    }
+
+    await new Promise((resolve) => chrome.storage.local.set(toSave, resolve));
+    loadOptions();
+    setStatus("Settings imported.", "accent");
+}
+
+function createCsvValue(value) {
+    if (value === null || value === undefined) return "";
+    const str = String(value);
+    if (/[,"\n]/.test(str)) {
+        return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+}
+
+function secondsToIso(seconds) {
+    if (!Number.isFinite(seconds)) return "";
+    try {
+        return new Date(seconds * 1000).toISOString();
+    } catch (e) {
+        return "";
+    }
+}
+
+function sessionsToCsv(sessions) {
+    const columns = [
+        "sessionId",
+        "platform",
+        "problemId",
+        "difficulty",
+        "status",
+        "stopReason",
+        "verdict",
+        "language",
+        "attemptCount",
+        "elapsedSeconds",
+        "startTime",
+        "endTime",
+        "firstSeen",
+        "lastSeen",
+        "lastUpdated",
+        "problemKey",
+        "schemaVersion",
+    ];
+
+    const timeColumns = new Set([
+        "startTime",
+        "endTime",
+        "firstSeen",
+        "lastSeen",
+        "lastUpdated",
+    ]);
+
+    const rows = sessions.map((session) => {
+        return columns
+            .map((key) => {
+                const value = session ? session[key] : "";
+                if (timeColumns.has(key)) {
+                    return createCsvValue(secondsToIso(value));
+                }
+                return createCsvValue(value);
+            })
+            .join(",");
+    });
+
+    return [columns.join(","), ...rows].join("\n");
+}
+
+async function exportUserData() {
+    const format = $("userDataFormat") ? $("userDataFormat").value : "json";
+    const resp = await sendMessage("getSessions");
+    if (!resp || !resp.success) {
+        setStatus(resp.message || "Failed to load sessions.", "error");
+        return;
+    }
+
+    const sessions = Array.isArray(resp.sessions) ? resp.sessions : [];
+    const dateTag = new Date().toISOString().slice(0, 10);
+
+    if (format === "csv") {
+        const csv = sessionsToCsv(sessions);
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `codebridge-user-data-${dateTag}.csv`;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(url), 800);
+        setStatus("User data exported (CSV).", "accent");
+        return;
+    }
+
+    const payload = {
+        format: USER_DATA_EXPORT_FORMAT,
+        version: USER_DATA_EXPORT_VERSION,
+        exportedAt: new Date().toISOString(),
+        sessions,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `codebridge-user-data-${dateTag}.json`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 800);
+    setStatus("User data exported (JSON).", "accent");
+}
+
+async function clearExtensionStorage() {
+    if (
+        !confirm("This will clear ALL settings and sign you out. Are you sure?")
+    ) {
+        return;
+    }
+    await sendMessage("clearSessions");
+    chrome.storage.local.clear(() => {
+        alert("Storage cleared.");
+        location.reload();
+    });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -250,4 +563,17 @@ document.addEventListener("DOMContentLoaded", () => {
     $("saveBtn").addEventListener("click", saveOptions);
     $("resetTemplates").addEventListener("click", resetTemplates);
     $("clearStorageBtn").addEventListener("click", clearExtensionStorage);
+    if ($("autoStartDelay")) {
+        $("autoStartDelay").addEventListener("input", updateDelayedAutoLabel);
+        $("autoStartDelay").addEventListener("change", updateDelayedAutoLabel);
+    }
+    if ($("exportSettingsBtn")) {
+        $("exportSettingsBtn").addEventListener("click", exportSettings);
+    }
+    if ($("importSettingsBtn")) {
+        $("importSettingsBtn").addEventListener("click", importSettings);
+    }
+    if ($("exportUserDataBtn")) {
+        $("exportUserDataBtn").addEventListener("click", exportUserData);
+    }
 });
