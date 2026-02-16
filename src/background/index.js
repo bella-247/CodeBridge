@@ -6,6 +6,7 @@
 import { restoreDeviceFlow, handleDeviceFlowAlarm } from "./auth/deviceFlow.js";
 import { registerMessageHandlers } from "./messaging/messageRouter.js";
 import { registerTabInjection } from "./leetcode/injector.js";
+import { initSessionTracking } from "./session/eventRouter.js";
 import { log } from "../core/logger.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -19,6 +20,11 @@ restoreDeviceFlow();
 
 // Register message handlers (popup ↔ background ↔ content)
 registerMessageHandlers();
+
+// Initialize session tracking defaults + prune
+initSessionTracking().catch((err) => {
+    log("session tracking init failed:", err && err.message);
+});
 
 // Register tab injection for LeetCode pages
 registerTabInjection();

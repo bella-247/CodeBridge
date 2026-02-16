@@ -5,6 +5,20 @@ const SIGNIN_TIMEOUT_MS = 20000;
 export function createActions({ state, ui, getFormValues }) {
     const CF_SUBMISSION_PROMPT_KEY = "cf_skip_submission_prompt";
 
+    function getRepoSettings() {
+        return new Promise((resolve) => {
+            chrome.storage.local.get(
+                [
+                    "github_owner",
+                    "github_repo",
+                    "github_branch",
+                    "allowUpdateDefault",
+                ],
+                (items) => resolve(items || {}),
+            );
+        });
+    }
+
     function getSkipSubmissionPromptSetting() {
         return new Promise((resolve) => {
             chrome.storage.local.get(
@@ -275,7 +289,7 @@ export function createActions({ state, ui, getFormValues }) {
         }
     }
 
-    function onSave({ copyAfter = false } = {}) {
+    async function onSave({ copyAfter = false } = {}) {
         ui.updateStatus("Preparing upload...");
         if (!state.lastProblemData) {
             ui.updateStatus("No detected problem. Click Detect first.", true);
@@ -297,19 +311,27 @@ export function createActions({ state, ui, getFormValues }) {
         }
 
         const {
-            owner,
-            repo,
-            branch,
             fileOrg,
-            allowUpdate,
             language,
             solveTimeRaw,
+            attemptCountRaw,
             note,
             commitMessage,
         } = getFormValues();
 
+        const repoSettings = await getRepoSettings();
+        const owner = repoSettings.github_owner || "";
+        const repo = repoSettings.github_repo || "";
+        const branch = repoSettings.github_branch || "main";
+        const allowUpdate = !!repoSettings.allowUpdateDefault;
+
         if (!owner || !repo) {
-            ui.updateStatus("Please provide GitHub owner and repository.", true);
+            const choice = await ui.promptMissingRepoSettings();
+            if (choice === "open") {
+                chrome.tabs.create({
+                    url: chrome.runtime.getURL("src/pages/options/options.html"),
+                });
+            }
             return;
         }
 
@@ -324,11 +346,20 @@ export function createActions({ state, ui, getFormValues }) {
             ? `${solveTimeRaw} min`
             : solveTimeRaw;
 
+        const parsedAttempts = attemptCountRaw
+            ? parseInt(attemptCountRaw, 10)
+            : null;
+        const attemptCount =
+            Number.isFinite(parsedAttempts) && parsedAttempts >= 0
+                ? parsedAttempts
+                : null;
+
         const problemData = {
             ...state.lastProblemData,
             extension: language,
             solveTime,
             note,
+            attemptCount,
         };
 
         const payload = {
@@ -405,46 +436,52 @@ export function createActions({ state, ui, getFormValues }) {
             return;
         }
 
-        const { owner, repo, branch, fileOrg, language } = getFormValues();
-        if (!owner || !repo) {
-            ui.clearSubmissionStatus();
-            return;
-        }
+        getRepoSettings().then((repoSettings) => {
+            const owner = repoSettings.github_owner || "";
+            const repo = repoSettings.github_repo || "";
+            const branch = repoSettings.github_branch || "main";
+            const { fileOrg, language } = getFormValues();
 
-        ui.setSubmissionStatus("Checking GitHub...", "var(--text-muted)");
+            if (!owner || !repo) {
+                ui.clearSubmissionStatus();
+                return;
+            }
 
-        const checkData = { ...data, extension: language };
-        chrome.runtime.sendMessage(
-            {
-                action: "checkSubmission",
-                problemData: checkData,
-                owner,
-                repo,
-                branch,
-                fileOrg,
-            },
-            (resp) => {
-                if (chrome.runtime.lastError) {
-                    ui.clearSubmissionStatus();
-                    return;
-                }
-                if (state.lastProblemData && state.lastProblemData.id === data.id) {
-                    if (resp && resp.success && resp.exists) {
-                        const url =
-                            resp && resp.path
-                                ? `https://github.com/${owner}/${repo}/blob/${branch}/${resp.path}`
-                                : `https://github.com/${owner}/${repo}`;
-                        ui.setSubmissionStatusLink(
-                            "✓ Solution exists",
-                            url,
-                            "var(--accent)",
-                        );
-                    } else {
+            ui.setSubmissionStatus("Checking GitHub...", "var(--text-muted)");
+
+            const checkData = { ...data, extension: language };
+            chrome.runtime.sendMessage(
+                {
+                    action: "checkSubmission",
+                    problemData: checkData,
+                    owner,
+                    repo,
+                    branch,
+                    fileOrg,
+                },
+                (resp) => {
+                    if (chrome.runtime.lastError) {
                         ui.clearSubmissionStatus();
+                        return;
                     }
-                }
-            },
-        );
+                    if (state.lastProblemData && state.lastProblemData.id === data.id) {
+                        if (resp && resp.success && resp.exists) {
+                            const url =
+                                resp && resp.path
+                                    ? `https://github.com/${owner}/${repo}/blob/${branch}/${resp.path}`
+                                    : `https://github.com/${owner}/${repo}`;
+                            ui.setSubmissionStatusLink(
+                                "✓ Solution exists",
+                                url,
+                                "var(--accent)",
+                            );
+                        } else {
+                            ui.clearSubmissionStatus();
+                        }
+                    }
+                },
+            );
+        });
     }
 
     function initAuthStatus() {

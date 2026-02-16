@@ -77,6 +77,24 @@
                             <input id="branch" type="text" value="main" />
                         </div>
                         <div class="input-group">
+                            <label>Overwrite Existing</label>
+                            <div class="checkbox-inline">
+                                <input id="allowUpdateDefault" type="checkbox" />
+                                <label
+                                    for="allowUpdateDefault"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Allow updates
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
                             <label>Problem Statement</label>
                             <div class="checkbox-inline">
                                 <input
@@ -95,6 +113,117 @@
                                 </label>
                             </div>
                         </div>
+                        <div class="input-group">
+                            <label>Floating Bubble</label>
+                            <div class="checkbox-inline">
+                                <input id="showBubble" type="checkbox" />
+                                <label
+                                    for="showBubble"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Show bubble
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-title">Session Tracker</div>
+                <div class="glass-card">
+                    <div class="form-grid">
+                        <div class="input-group">
+                            <label>Timer Mode</label>
+                            <select id="timerStartMode">
+                                <option value="DELAYED_AUTO">
+                                    Delayed Auto (10s)
+                                </option>
+                                <option value="TYPING">Typing</option>
+                                <option value="MANUAL">Manual</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Auto Start Delay (sec)</label>
+                            <input
+                                id="autoStartDelay"
+                                type="number"
+                                min="0"
+                                step="1"
+                                placeholder="10"
+                            />
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label>Session Prune Days</label>
+                            <input
+                                id="sessionPruneDays"
+                                type="number"
+                                min="1"
+                                step="1"
+                                placeholder="90"
+                            />
+                        </div>
+                        <div class="input-group">
+                            <label>Max Sessions Stored</label>
+                            <input
+                                id="maxSessionsStored"
+                                type="number"
+                                min="1"
+                                step="1"
+                                placeholder="1000"
+                            />
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label>Platforms Enabled</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-row">
+                                    <input
+                                        id="platformCodeforces"
+                                        type="checkbox"
+                                    />
+                                    Codeforces
+                                </label>
+                                <label class="checkbox-row">
+                                    <input
+                                        id="platformLeetCode"
+                                        type="checkbox"
+                                    />
+                                    LeetCode
+                                </label>
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label>Timer Overlay</label>
+                            <div class="checkbox-inline">
+                                <input id="showTimerOverlay" type="checkbox" />
+                                <label
+                                    for="showTimerOverlay"
+                                    style="
+                                        text-transform: none;
+                                        font-size: 12px;
+                                        margin: 0;
+                                    "
+                                >
+                                    Show timer
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-grid" style="margin-top: 12px">
+                        <div class="input-group">
+                            <label>Timer Size</label>
+                            <select id="timerOverlaySize">
+                                <option value="small">Small</option>
+                                <option value="medium">Medium</option>
+                                <option value="large">Large</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -108,7 +237,8 @@
                     ></textarea>
                     <div class="vars-guide">
                         Available: <code>[id]</code>, <code>[title]</code>,
-                        <code>[difficulty]</code>, <code>[language]</code>.
+                        <code>[difficulty]</code>, <code>[language]</code>,
+                        <code>[attempts]</code>.
                         Note: <code>[time]</code> is not supported in commit
                         messages.
                     </div>
@@ -136,7 +266,8 @@
                     <div class="vars-guide">
                         Available: <code>[title]</code>, <code>[id]</code>,
                         <code>[difficulty]</code>, <code>[url]</code>,
-                        <code>[time]</code>, <code>[platform]</code>. This will
+                        <code>[time]</code>, <code>[attempts]</code>,
+                        <code>[platform]</code>. This will
                         be automatically wrapped in comments based on the
                         language.
                     </div>
@@ -152,7 +283,8 @@
                         Available: <code>[title]</code>, <code>[id]</code>,
                         <code>[difficulty]</code>, <code>[url]</code>,
                         <code>[description]</code>, <code>[time]</code>,
-                        <code>[tags]</code>, <code>[platform]</code>
+                        <code>[attempts]</code>, <code>[tags]</code>,
+                        <code>[platform]</code>
                     </div>
                 </div>
 

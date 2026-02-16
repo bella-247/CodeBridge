@@ -19,6 +19,20 @@
         location.hostname,
     );
 
+    // Initialize session tracker (non-blocking)
+    (async () => {
+        try {
+            const mod = await import(
+                chrome.runtime.getURL("src/content/sessionTracker.js"),
+            );
+            if (mod && mod.initSessionTracker) {
+                mod.initSessionTracker();
+            }
+        } catch (e) {
+            console.warn("[CodeBridge] Session tracker init failed", e);
+        }
+    })();
+
     // --- Constants and Maps ---
     const LANGUAGE_EXTENSION_MAP = {
         cpp: ".cpp",
@@ -59,6 +73,7 @@
     let _submissionObserver = null;
     let _showBubble = true;
     let _adapterPromise = null;
+    let _bubbleTemporarilyHidden = false;
     const ACCEPTED_RE = /\bAccepted\b/i;
 
     // --- Helper Functions ---
@@ -442,6 +457,7 @@
                 boxShadow: "0 18px 40px rgba(0,0,0,0.45)",
                 border: "1px solid rgba(148,163,184,0.25)",
                 fontFamily: "Inter, sans-serif",
+                boxSizing: "border-box",
             });
 
             const title = document.createElement("div");
@@ -452,11 +468,28 @@
                 marginBottom: "8px",
             });
 
+            const hint = document.createElement("div");
+            hint.textContent = "Add your solve time so it appears in the upload.";
+            Object.assign(hint.style, {
+                fontSize: "11px",
+                color: "#94a3b8",
+                marginBottom: "10px",
+            });
+
+            const fields = document.createElement("div");
+            Object.assign(fields.style, {
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "10px",
+                marginBottom: "10px",
+            });
+
             const input = document.createElement("input");
             input.type = "text";
             input.placeholder = "e.g. 45 min";
             Object.assign(input.style, {
                 width: "100%",
+                maxWidth: "100%",
                 padding: "10px 12px",
                 borderRadius: "10px",
                 border: "1px solid rgba(148,163,184,0.35)",
@@ -464,15 +497,25 @@
                 color: "#e2e8f0",
                 outline: "none",
                 fontSize: "13px",
-                marginBottom: "10px",
+                boxSizing: "border-box",
             });
 
-            const hint = document.createElement("div");
-            hint.textContent = "Add your solve time to include it in the upload.";
-            Object.assign(hint.style, {
-                fontSize: "11px",
-                color: "#94a3b8",
-                marginBottom: "12px",
+            const attemptsInput = document.createElement("input");
+            attemptsInput.type = "number";
+            attemptsInput.min = "0";
+            attemptsInput.step = "1";
+            attemptsInput.placeholder = "Attempts";
+            Object.assign(attemptsInput.style, {
+                width: "100%",
+                maxWidth: "100%",
+                padding: "10px 12px",
+                borderRadius: "10px",
+                border: "1px solid rgba(148,163,184,0.35)",
+                background: "rgba(15,23,42,0.8)",
+                color: "#e2e8f0",
+                outline: "none",
+                fontSize: "13px",
+                boxSizing: "border-box",
             });
 
             const actions = document.createElement("div");
@@ -513,26 +556,45 @@
                 resolve(result);
             }
 
+            const buildResult = () => {
+                const solveTime = (input.value || "").trim();
+                const attemptsRaw = (attemptsInput.value || "").trim();
+                const attemptCount = attemptsRaw
+                    ? parseInt(attemptsRaw, 10)
+                    : null;
+                return {
+                    solveTime,
+                    attemptCount:
+                        Number.isFinite(attemptCount) && attemptCount >= 0
+                            ? attemptCount
+                            : null,
+                };
+            };
+
             cancelBtn.addEventListener("click", () => cleanup(null));
-            okBtn.addEventListener("click", () => cleanup((input.value || "").trim()));
+            okBtn.addEventListener("click", () => cleanup(buildResult()));
             overlay.addEventListener("click", (e) => {
                 if (e.target === overlay) cleanup(null);
             });
-            input.addEventListener("keydown", (e) => {
+            const onKey = (e) => {
                 if (e.key === "Enter") {
                     e.preventDefault();
-                    cleanup((input.value || "").trim());
+                    cleanup(buildResult());
                 } else if (e.key === "Escape") {
                     e.preventDefault();
                     cleanup(null);
                 }
-            });
+            };
+            input.addEventListener("keydown", onKey);
+            attemptsInput.addEventListener("keydown", onKey);
 
             actions.appendChild(cancelBtn);
             actions.appendChild(okBtn);
             card.appendChild(title);
-            card.appendChild(input);
             card.appendChild(hint);
+            fields.appendChild(input);
+            fields.appendChild(attemptsInput);
+            card.appendChild(fields);
             card.appendChild(actions);
             overlay.appendChild(card);
             document.body.appendChild(overlay);
@@ -542,6 +604,7 @@
     }
 
     function ensureBubble() {
+        if (_bubbleTemporarilyHidden) return;
         if (document.getElementById("cb-bubble")) return;
         try {
             const bubble = document.createElement("div");
@@ -567,6 +630,30 @@
             bubble.innerHTML =
                 '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L12 22"/><path d="M5 9L12 2L19 9"/></svg>';
 
+            const close = document.createElement("div");
+            close.textContent = "×";
+            Object.assign(close.style, {
+                position: "absolute",
+                top: "4px",
+                right: "4px",
+                width: "18px",
+                height: "18px",
+                borderRadius: "50%",
+                background: "rgba(0,0,0,0.35)",
+                color: "#fff",
+                fontSize: "12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+            });
+            close.addEventListener("click", (ev) => {
+                ev.stopPropagation();
+                bubble.style.display = "none";
+                _bubbleTemporarilyHidden = true;
+            });
+            bubble.appendChild(close);
+
             bubble.addEventListener(
                 "mouseenter",
                 () => (bubble.style.transform = "scale(1.1)"),
@@ -580,7 +667,11 @@
                 try {
                     bubble.dataset.processing = "1";
                     bubble.style.opacity = "0.7";
-                    const solveTimeRaw = await promptSolveTime();
+                    const promptResult = await promptSolveTime();
+                    const solveTimeRaw =
+                        promptResult && typeof promptResult.solveTime === "string"
+                            ? promptResult.solveTime
+                            : "";
                     if (!solveTimeRaw) {
                         showBubbleError(
                             "Please enter time to solve before uploading.",
@@ -596,6 +687,12 @@
                     const data = await gatherProblemData();
                     if (!data || !data.code) throw new Error("No code found.");
                     data.solveTime = solveTime;
+                    if (
+                        promptResult &&
+                        Number.isFinite(promptResult.attemptCount)
+                    ) {
+                        data.attemptCount = promptResult.attemptCount;
+                    }
                     await performAutoSave(data, { silent: false });
                 } catch (err) {
                     minimalToast(err.message || "Sync failed", false);
@@ -615,6 +712,7 @@
             if (bubble) bubble.style.display = "none";
             return;
         }
+        if (_bubbleTemporarilyHidden) return;
         ensureBubble();
         const bubble = document.getElementById("cb-bubble");
         if (bubble) bubble.style.display = "flex";

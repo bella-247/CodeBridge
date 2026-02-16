@@ -76,12 +76,18 @@ export function buildReadmeContent(problemData, template = null, options = {}) {
         const tags = (problemData.tags || []).join(", ");
         const difficulty = problemData.difficulty || "";
         const solveTime = problemData.solveTime || "";
+        const attemptCount =
+            typeof problemData.attemptCount === "number"
+                ? problemData.attemptCount
+                : null;
 
         const lines = [];
         lines.push(`# ${title}`);
         lines.push("");
         if (difficulty) lines.push(`**Difficulty:** ${difficulty}`);
         if (solveTime) lines.push(`**Time:** ${solveTime}`);
+        if (attemptCount !== null)
+            lines.push(`**Attempts:** ${attemptCount}`);
         if (tags) lines.push(`**Tags:** ${tags}`);
         if (url) lines.push(`**URL:** ${url}`);
         lines.push("");
@@ -149,6 +155,10 @@ export function generateUploadFiles(
         ? `${header}\n\n${solutionBody}`
         : solutionBody;
     const solveTime = problemData.solveTime || "";
+    const attemptCount =
+        typeof problemData.attemptCount === "number"
+            ? problemData.attemptCount
+            : null;
     const wantsDescriptionComment = description && includeProblemStatement;
     const wantsNoteComment = !!note;
     const wantsMetaComment = !!(
@@ -163,6 +173,8 @@ export function generateUploadFiles(
         if (dataWithDesc.difficulty)
             metaLines.push(`Difficulty: ${dataWithDesc.difficulty}`);
         if (solveTime) metaLines.push(`Time: ${solveTime}`);
+        if (attemptCount !== null)
+            metaLines.push(`Attempts: ${attemptCount}`);
         if (dataWithDesc.url) metaLines.push(`URL: ${dataWithDesc.url}`);
         if (wantsDescriptionComment) {
             metaLines.push("");

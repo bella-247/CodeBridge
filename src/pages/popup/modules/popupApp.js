@@ -13,20 +13,9 @@ export function initPopup() {
 
     const ui = createUi(state);
     const getFormValues = () => {
-        const owner = ($("owner") && $("owner").value.trim()) || "";
-        const repo = ($("repo") && $("repo").value.trim()) || "";
-        const branch = ($("branch") && $("branch").value.trim()) || "";
         const fileOrgSel = document.getElementById("fileOrg");
         const fileOrg =
             fileOrgSel && fileOrgSel.value ? fileOrgSel.value : "folder";
-        const allowUpdate = !!(
-            document.getElementById("allowUpdate") &&
-            document.getElementById("allowUpdate").checked
-        );
-        const showBubble = !!(
-            document.getElementById("showBubble") &&
-            document.getElementById("showBubble").checked
-        );
         const langSel = document.getElementById("language");
         const language =
             (langSel && langSel.value) ||
@@ -36,6 +25,10 @@ export function initPopup() {
         const solveTimeRaw = solveTimeEl
             ? (solveTimeEl.value || "").trim()
             : "";
+        const attemptEl = document.getElementById("attemptCount");
+        const attemptCountRaw = attemptEl
+            ? (attemptEl.value || "").trim()
+            : "";
         const noteEl = document.getElementById("note");
         const note = noteEl ? (noteEl.value || "").trim() : "";
         const commitEl = document.getElementById("commitMessage");
@@ -44,14 +37,10 @@ export function initPopup() {
             : "";
 
         return {
-            owner,
-            repo,
-            branch,
             fileOrg,
-            allowUpdate,
-            showBubble,
             language,
             solveTimeRaw,
+            attemptCountRaw,
             note,
             commitMessage,
         };
@@ -133,6 +122,14 @@ function bindUiEvents(actions, ui) {
             e.preventDefault();
             chrome.tabs.create({
                 url: chrome.runtime.getURL("src/pages/help/help.html"),
+            });
+        });
+
+    const settingsBtn = $("openSettingsBtn");
+    if (settingsBtn)
+        settingsBtn.addEventListener("click", () => {
+            chrome.tabs.create({
+                url: chrome.runtime.getURL("src/pages/options/options.html"),
             });
         });
 }

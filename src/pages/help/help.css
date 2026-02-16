@@ -5,6 +5,7 @@ body {
     margin: 0;
     padding: 40px 20px;
     box-sizing: border-box;
+    font-family: "Inter", sans-serif;
 }
 
 .help-container {
@@ -22,6 +23,9 @@ body {
     gap: 16px;
     position: relative;
     overflow: hidden;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .platform-card::after {
@@ -31,7 +35,7 @@ body {
     right: -20%;
     width: 200px;
     height: 200px;
-    background: var(--primary);
+    background: var(--primary, #4fc3f7);
     opacity: 0.05;
     border-radius: 50%;
     filter: blur(80px);
@@ -51,6 +55,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 18px;
 }
 
 .platform-header h3 {
@@ -72,12 +77,12 @@ body {
     display: flex;
     gap: 12px;
     font-size: 15px;
-    color: var(--text-main);
+    color: rgba(255, 255, 255, 0.85);
     line-height: 1.5;
 }
 
 .step-num {
-    color: var(--primary);
+    color: var(--primary, #4fc3f7);
     font-weight: 700;
     min-width: 20px;
 }
@@ -99,7 +104,7 @@ body {
 .feature-item h4 {
     margin: 0 0 8px 0;
     font-size: 14px;
-    color: var(--accent);
+    color: #4fc3f7;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -107,7 +112,7 @@ body {
 .feature-item p {
     margin: 0;
     font-size: 13px;
-    color: var(--text-muted);
+    color: rgba(255, 255, 255, 0.6);
 }
 
 code {
@@ -116,5 +121,9 @@ code {
     border-radius: 4px;
     font-family: "JetBrains Mono", monospace;
     font-size: 13px;
-    color: var(--accent);
+    color: #4fc3f7;
+}
+
+.muted {
+    color: rgba(255, 255, 255, 0.6);
 }
