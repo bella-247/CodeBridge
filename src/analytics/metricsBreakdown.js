@@ -29,10 +29,10 @@ function normalizeDifficultyValue(value) {
 }
 
 export function computePlatformStats(sessions) {
-    const solved = sessions.filter((session) => isSessionEnded(session));
+    const ended = sessions.filter((session) => isSessionEnded(session));
     const stats = {};
 
-    solved.forEach((session) => {
+    ended.forEach((session) => {
         const key = session.platform || "unknown";
         if (!stats[key]) {
             stats[key] = { platform: key, count: 0, timeSeconds: 0 };

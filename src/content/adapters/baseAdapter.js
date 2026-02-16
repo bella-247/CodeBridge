@@ -47,5 +47,6 @@ export function parseDifficultyNumber(text) {
 
 export function normalizeVerdict(text) {
     if (!text) return null;
-    return String(text).trim();
+    const trimmed = String(text).trim();
+    return trimmed === "" ? null : trimmed;
 }

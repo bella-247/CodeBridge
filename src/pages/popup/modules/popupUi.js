@@ -343,10 +343,17 @@ export function createUi(state) {
             openBtn.className = "btn primary";
             openBtn.textContent = "Open Settings";
 
+            function handleKeydown(event) {
+                if (event.key === "Escape") {
+                    cleanup("cancel");
+                }
+            }
+
             function cleanup(action) {
                 try {
                     overlay.remove();
                 } catch (e) {}
+                document.removeEventListener("keydown", handleKeydown);
                 resolve(action);
             }
 
@@ -355,6 +362,7 @@ export function createUi(state) {
             overlay.addEventListener("click", (e) => {
                 if (e.target === overlay) cleanup("cancel");
             });
+            document.addEventListener("keydown", handleKeydown);
 
             actions.appendChild(cancelBtn);
             actions.appendChild(openBtn);

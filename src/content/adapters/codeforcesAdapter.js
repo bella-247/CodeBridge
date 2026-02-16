@@ -1,18 +1,26 @@
 // content/adapters/codeforcesAdapter.js — Session tracking for Codeforces
 
-import { createAdapter, parseDifficultyNumber, normalizeVerdict } from "./baseAdapter.js";
+import {
+    createAdapter,
+    parseDifficultyNumber,
+    normalizeVerdict,
+} from "./baseAdapter.js";
 
 function extractSlugFromUrl(url) {
     try {
         const urlObj = new URL(url, location.origin);
         const path = urlObj.pathname;
 
-        const contestMatch = path.match(/\/(contest|gym)\/(\d+)\/problem\/([A-Z0-9]+)/i);
+        const contestMatch = path.match(
+            /\/(contest|gym)\/(\d+)\/problem\/([A-Z0-9]+)/i,
+        );
         if (contestMatch) {
             return `${contestMatch[2]}${contestMatch[3]}`;
         }
 
-        const problemsetMatch = path.match(/\/problemset\/problem\/(\d+)\/([A-Z0-9]+)/i);
+        const problemsetMatch = path.match(
+            /\/problemset\/problem\/(\d+)\/([A-Z0-9]+)/i,
+        );
         if (problemsetMatch) {
             return `${problemsetMatch[1]}${problemsetMatch[2]}`;
         }
@@ -24,7 +32,9 @@ function extractSlugFromUrl(url) {
 
 function findProblemLinkFromTable() {
     try {
-        const tables = Array.from(document.querySelectorAll(".datatable, table"));
+        const tables = Array.from(
+            document.querySelectorAll(".datatable, table"),
+        );
         for (const table of tables) {
             const rows = Array.from(table.querySelectorAll("tr"));
             if (!rows.length) continue;
@@ -50,11 +60,18 @@ function findProblemLinkFromTable() {
                     const cell = cells[problemIdx];
                     const link =
                         cell.querySelector('a[href*="/problemset/problem/"]') ||
-                        cell.querySelector('a[href*="/contest/"][href*="/problem/"]') ||
-                        cell.querySelector('a[href*="/gym/"][href*="/problem/"]') ||
+                        cell.querySelector(
+                            'a[href*="/contest/"][href*="/problem/"]',
+                        ) ||
+                        cell.querySelector(
+                            'a[href*="/gym/"][href*="/problem/"]',
+                        ) ||
                         cell.querySelector('a[href*="/problem/"]');
                     if (link && link.getAttribute("href")) {
-                        return new URL(link.getAttribute("href"), location.origin).href;
+                        return new URL(
+                            link.getAttribute("href"),
+                            location.origin,
+                        ).href;
                     }
                 }
             }
@@ -82,23 +99,35 @@ function extractSubmissionData() {
         let verdict = null;
         let language = null;
 
-        const rows = Array.from(document.querySelectorAll(".datatable table tr, table tr"));
+        const rows = Array.from(
+            document.querySelectorAll(".datatable table tr, table tr"),
+        );
         for (const row of rows) {
             const cells = Array.from(row.querySelectorAll("td, th"));
             if (cells.length < 2) continue;
             const label = (cells[0].textContent || "").trim().toLowerCase();
             const value = (cells[1].textContent || "").trim();
 
-            if (!verdict && (label.includes("verdict") || label.includes("result") || label.includes("status"))) {
+            if (
+                !verdict &&
+                (label.includes("verdict") ||
+                    label.includes("result") ||
+                    label.includes("status"))
+            ) {
                 verdict = value;
             }
-            if (!language && (label === "lang" || label.includes("language") || label.includes("язык"))) {
+            if (
+                !language &&
+                (label === "lang" ||
+                    label.includes("language") ||
+                    label.includes("язык"))
+            ) {
                 language = value;
             }
         }
 
         verdict = normalizeVerdict(verdict);
-        language = language ? language.trim() : null;
+        language = language || null;
 
         if (!verdict && !language) return null;
         return { verdict, language };
@@ -152,18 +181,29 @@ export const CodeforcesSessionAdapter = createAdapter({
         return extractSubmissionData();
     },
     observeSubmissionData: (callback) => {
+        let pendingTask = null;
         const observer = new MutationObserver(() => {
-            const data = extractSubmissionData();
-            if (data && data.verdict) {
-                observer.disconnect();
-                callback(data);
-            }
+            if (pendingTask) return;
+            pendingTask = setTimeout(() => {
+                pendingTask = null;
+                const data = extractSubmissionData();
+                if (data && data.verdict) {
+                    observer.disconnect();
+                    callback(data);
+                }
+            }, 50);
         });
         observer.observe(document.documentElement || document.body, {
             childList: true,
             subtree: true,
         });
-        return () => observer.disconnect();
+        return () => {
+            if (pendingTask) {
+                clearTimeout(pendingTask);
+                pendingTask = null;
+            }
+            observer.disconnect();
+        };
     },
     isSuccessfulSubmission: (data) => {
         if (!data || !data.verdict) return false;

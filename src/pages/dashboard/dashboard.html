@@ -35,7 +35,12 @@
                 </div>
             </header>
 
-            <div id="storageBanner" class="storage-banner hidden">
+            <div
+                id="storageBanner"
+                class="storage-banner hidden"
+                role="alert"
+                aria-atomic="true"
+            >
                 <div>
                     <strong>Storage nearing limit.</strong>
                     Export your data or clear older sessions to keep analytics fresh.
@@ -175,15 +180,21 @@
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Platform</th>
-                                <th>Problem</th>
-                                <th>Difficulty</th>
-                                <th>Time</th>
-                                <th>Status</th>
+                                <th scope="col">Date</th>
+                                <th scope="col">Platform</th>
+                                <th scope="col">Problem</th>
+                                <th scope="col">Difficulty</th>
+                                <th scope="col">Time</th>
+                                <th scope="col">Status</th>
                             </tr>
                         </thead>
-                        <tbody id="recentTableBody"></tbody>
+                        <tbody id="recentTableBody">
+                            <tr>
+                                <td colspan="6" class="metric-sub" aria-live="polite" aria-atomic="true">
+                                    No sessions yet.
+                                </td>
+                            </tr>
+                        </tbody>
                     </table>
                 </div>
             </section>

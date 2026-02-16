@@ -13,15 +13,22 @@ const TERMINAL_STOP_REASONS = new Set([
     SESSION_STOP_REASONS.PROBLEM_SWITCH,
 ]);
 
+function isTerminalSession(session) {
+    if (!session) return false;
+    const status = session.status ? String(session.status).toUpperCase() : "";
+    const stopReason = session.stopReason
+        ? String(session.stopReason).toLowerCase()
+        : "";
+    return (
+        TERMINAL_SESSION_STATUSES.includes(status) ||
+        TERMINAL_STOP_REASONS.has(stopReason)
+    );
+}
+
 export function getSessionEndSeconds(session) {
     if (!session) return null;
     if (Number.isFinite(session.endTime)) return session.endTime;
-    const status = session.status ? String(session.status).toUpperCase() : "";
-    const stopReason = session.stopReason ? String(session.stopReason).toLowerCase() : "";
-    const isTerminal =
-        TERMINAL_SESSION_STATUSES.includes(status) ||
-        TERMINAL_STOP_REASONS.has(stopReason);
-    if (isTerminal) {
+    if (isTerminalSession(session)) {
         if (Number.isFinite(session.lastUpdated)) return session.lastUpdated;
         if (Number.isFinite(session.lastSeen)) return session.lastSeen;
         if (Number.isFinite(session.startTime)) return session.startTime;
@@ -51,18 +58,18 @@ export function getSessionDurationSeconds(session) {
 export function isSessionEnded(session) {
     if (!session) return false;
     if (Number.isFinite(session.endTime)) return true;
-    const status = session.status ? String(session.status).toUpperCase() : "";
-    const stopReason = session.stopReason ? String(session.stopReason).toLowerCase() : "";
-    if (TERMINAL_SESSION_STATUSES.includes(status)) return true;
-    if (TERMINAL_STOP_REASONS.has(stopReason)) return true;
-    return false;
+    return isTerminalSession(session);
 }
 
 export function isSolvedSession(session) {
     if (!session) return false;
-    const stopReason = session.stopReason ? String(session.stopReason).toLowerCase() : "";
-    // Treat only explicit success signals as solved to avoid false positives.
-    if (stopReason === "accepted") return true;
+    if (isTerminalSession(session)) {
+        const stopReason = session.stopReason
+            ? String(session.stopReason).toLowerCase()
+            : "";
+        // Treat only explicit success signals as solved to avoid false positives.
+        if (stopReason === "accepted") return true;
+    }
     if (session.verdict) {
         const verdict = String(session.verdict).trim().toLowerCase();
         if (ACCEPTED_VERDICTS.has(verdict)) return true;

@@ -46,6 +46,15 @@ function decodeHtmlEntities(text) {
         });
 }
 
+function getAttemptCount(problemData) {
+    if (!problemData || !Object.prototype.hasOwnProperty.call(problemData, "attemptCount")) {
+        return null;
+    }
+    return Number.isFinite(problemData.attemptCount)
+        ? problemData.attemptCount
+        : null;
+}
+
 /**
  * Generate the README markdown content
  * @param {Object} problemData
@@ -76,10 +85,7 @@ export function buildReadmeContent(problemData, template = null, options = {}) {
         const tags = (problemData.tags || []).join(", ");
         const difficulty = problemData.difficulty || "";
         const solveTime = problemData.solveTime || "";
-        const attemptCount =
-            typeof problemData.attemptCount === "number"
-                ? problemData.attemptCount
-                : null;
+        const attemptCount = getAttemptCount(problemData);
 
         const lines = [];
         lines.push(`# ${title}`);
@@ -155,10 +161,7 @@ export function generateUploadFiles(
         ? `${header}\n\n${solutionBody}`
         : solutionBody;
     const solveTime = problemData.solveTime || "";
-    const attemptCount =
-        typeof problemData.attemptCount === "number"
-            ? problemData.attemptCount
-            : null;
+    const attemptCount = getAttemptCount(problemData);
     const wantsDescriptionComment = description && includeProblemStatement;
     const wantsNoteComment = !!note;
     const wantsMetaComment = !!(

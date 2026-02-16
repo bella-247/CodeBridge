@@ -2,7 +2,7 @@
     const trustedOrigin = window.location.origin;
     const originalFetch = window.fetch;
     window.fetch = async function(...args) {
-        const response = await originalFetch(...args);
+        const response = await Reflect.apply(originalFetch, this, args);
         try {
             const url = response.url;
             // Pattern: /submissions/detail/<id>/check/

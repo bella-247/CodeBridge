@@ -47,7 +47,7 @@ const PLATFORM_LABELS = {
 
 function formatPlatformName(platform) {
     const key = (platform || "").toLowerCase();
-    return PLATFORM_LABELS[key] || (platform || "Unknown");
+    return PLATFORM_LABELS[key] || platform || "Unknown";
 }
 
 function formatDifficultyLabel(value) {
@@ -62,7 +62,10 @@ function sendMessage(action, payload = {}) {
         try {
             chrome.runtime.sendMessage({ action, ...payload }, (resp) => {
                 if (chrome.runtime.lastError) {
-                    resolve({ success: false, message: chrome.runtime.lastError.message });
+                    resolve({
+                        success: false,
+                        message: chrome.runtime.lastError.message,
+                    });
                     return;
                 }
                 resolve(resp || { success: false, message: "No response" });
@@ -177,9 +180,7 @@ function renderWeeklyChart(series, mode) {
             padding +
             (index / Math.max(1, values.length - 1)) * (width - padding * 2);
         const y =
-            height -
-            padding -
-            (value / maxValue) * (height - padding * 2);
+            height - padding - (value / maxValue) * (height - padding * 2);
         return `${x},${y}`;
     });
 
@@ -187,7 +188,10 @@ function renderWeeklyChart(series, mode) {
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
     svg.setAttribute("class", "chart-svg");
 
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    const line = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "polyline",
+    );
     line.setAttribute("fill", "none");
     line.setAttribute("stroke", "#38bdf8");
     line.setAttribute("stroke-width", "2");
@@ -196,7 +200,10 @@ function renderWeeklyChart(series, mode) {
 
     points.forEach((point, index) => {
         const [x, y] = point.split(",");
-        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        const dot = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "circle",
+        );
         dot.setAttribute("cx", x);
         dot.setAttribute("cy", y);
         dot.setAttribute("r", "3");
@@ -207,7 +214,10 @@ function renderWeeklyChart(series, mode) {
             mode === "time"
                 ? `${weekLabel}: ${value.toFixed(1)}h`
                 : `${weekLabel}: ${value} sessions`;
-        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        const title = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "title",
+        );
         title.textContent = tooltip;
         dot.appendChild(title);
         svg.appendChild(dot);
@@ -221,7 +231,9 @@ function renderWeeklyChart(series, mode) {
     labelRow.style.fontSize = "11px";
     labelRow.style.color = "rgba(255,255,255,0.5)";
     const first = series[0] ? series[0].label : "";
-    const last = series[series.length - 1] ? series[series.length - 1].label : "";
+    const last = series[series.length - 1]
+        ? series[series.length - 1].label
+        : "";
     labelRow.innerHTML = `<span>${first}</span><span>${last}</span>`;
     container.appendChild(labelRow);
 }
@@ -239,7 +251,8 @@ function renderDifficulty(buckets) {
         !buckets.buckets.length ||
         buckets.buckets.every((bucket) => bucket.count === 0)
     ) {
-        chart.innerHTML = "<div class='metric-sub'>No difficulty data yet.</div>";
+        chart.innerHTML =
+            "<div class='metric-sub'>No difficulty data yet.</div>";
         return;
     }
 
@@ -264,7 +277,7 @@ function renderDifficulty(buckets) {
         stat.textContent = `${formatDifficultyLabel(bucket.label)}: Avg ${formatDuration(
             bucket.avgSeconds,
             {
-            short: true,
+                short: true,
             },
         )}`;
         stats.appendChild(stat);
@@ -291,9 +304,12 @@ function renderPlatforms(platformStats, totalSolved) {
         const name = formatPlatformName(platform.platform);
         card.innerHTML = `
             <h4>${name}</h4>
-            <p>${platform.count} solved · ${formatDuration(platform.timeSeconds, {
-                short: true,
-            })}</p>
+            <p>${platform.count} solved · ${formatDuration(
+                platform.timeSeconds,
+                {
+                    short: true,
+                },
+            )}</p>
             <p>${percent}% of solves</p>
         `;
         container.appendChild(card);
@@ -305,8 +321,10 @@ function renderRecentSessions(sessions) {
     if (!tbody) return;
     tbody.innerHTML = "";
 
+    const emptyRowHtml =
+        "<td colspan='6' class='metric-sub' aria-live='polite' aria-atomic='true'>No sessions yet.</td>";
+
     const rows = sessions
-        .filter((session) => isSessionEnded(session))
         .map((session) => ({
             session,
             endSeconds: getSessionEndSeconds(session),
@@ -316,8 +334,7 @@ function renderRecentSessions(sessions) {
 
     if (!rows.length) {
         const emptyRow = document.createElement("tr");
-        emptyRow.innerHTML =
-            "<td colspan='6' class='metric-sub'>No sessions yet.</td>";
+        emptyRow.innerHTML = emptyRowHtml;
         tbody.appendChild(emptyRow);
         return;
     }
@@ -329,7 +346,9 @@ function renderRecentSessions(sessions) {
         });
         const difficulty = formatDifficultyLabel(session.difficulty);
         const statusLabel =
-            session.status === "COMPLETED" ? "Solved" : session.status || "Solved";
+            session.status === "COMPLETED"
+                ? "Solved"
+                : session.status || "Solved";
         row.innerHTML = `
             <td>${formatDateLabel(endSeconds)}</td>
             <td>${formatPlatformName(session.platform)}</td>
@@ -368,7 +387,8 @@ async function loadData() {
         ),
     ]);
 
-    const sessions = sessionsResp && sessionsResp.success ? sessionsResp.sessions : [];
+    const sessions =
+        sessionsResp && sessionsResp.success ? sessionsResp.sessions : [];
     state.sessions = Array.isArray(sessions) ? sessions : [];
     state.settings.maxSessions =
         typeof settings.MAX_SESSIONS_STORED === "number"
@@ -426,7 +446,11 @@ async function clearOldest() {
     try {
         const resp = await sendMessage("trimSessions", { keepCount });
         if (!resp || !resp.success) {
-            alert(resp && resp.message ? resp.message : "Failed to trim sessions.");
+            alert(
+                resp && resp.message
+                    ? resp.message
+                    : "Failed to trim sessions.",
+            );
             return;
         }
         await refresh();
@@ -440,7 +464,11 @@ async function clearAll() {
     try {
         const resp = await sendMessage("clearSessions");
         if (!resp || !resp.success) {
-            alert(resp && resp.message ? resp.message : "Failed to clear sessions.");
+            alert(
+                resp && resp.message
+                    ? resp.message
+                    : "Failed to clear sessions.",
+            );
             return;
         }
         await refresh();

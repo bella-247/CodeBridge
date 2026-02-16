@@ -13,11 +13,15 @@ const ACCEPTED_VERDICTS = new Set(["accepted", "ok", "ac", "passed"]);
 
 function normalizeSession(session) {
     if (!session || typeof session !== "object") return null;
-    const platform = session.platform ? String(session.platform).toLowerCase() : "";
+    const platform = session.platform
+        ? String(session.platform).toLowerCase()
+        : "";
     const problemId = session.problemId ? String(session.problemId) : "";
-    const problemKey = session.problemKey || (platform && problemId ? `${platform}:${problemId}` : "");
+    const problemKey =
+        session.problemKey ||
+        (platform && problemId ? `${platform}:${problemId}` : "");
 
-    const fallbackId = `${platform || "unknown"}:${problemId || "unknown"}:${session.firstSeen || session.startTime || session.lastUpdated || ""}`;
+    const fallbackId = `${platform || "unknown"}:${problemId || "unknown"}:${session.firstSeen ?? session.startTime ?? session.lastUpdated ?? ""}`;
     const normalized = {
         sessionId: session.sessionId || fallbackId,
         platform: platform || "unknown",
@@ -32,16 +36,27 @@ function normalizeSession(session) {
             ? String(session.stopReason).toLowerCase()
             : null,
         verdict: session.verdict || null,
-        language: typeof session.language === "string" ? session.language.trim() : null,
-        attemptCount: Number.isFinite(session.attemptCount) ? session.attemptCount : 0,
+        language:
+            typeof session.language === "string"
+                ? session.language.trim()
+                : null,
+        attemptCount: Number.isFinite(session.attemptCount)
+            ? session.attemptCount
+            : 0,
         elapsedSeconds: Number.isFinite(session.elapsedSeconds)
             ? session.elapsedSeconds
             : 0,
-        startTime: Number.isFinite(session.startTime) ? session.startTime : null,
+        startTime: Number.isFinite(session.startTime)
+            ? session.startTime
+            : null,
         endTime: Number.isFinite(session.endTime) ? session.endTime : null,
-        firstSeen: Number.isFinite(session.firstSeen) ? session.firstSeen : null,
+        firstSeen: Number.isFinite(session.firstSeen)
+            ? session.firstSeen
+            : null,
         lastSeen: Number.isFinite(session.lastSeen) ? session.lastSeen : null,
-        lastUpdated: Number.isFinite(session.lastUpdated) ? session.lastUpdated : null,
+        lastUpdated: Number.isFinite(session.lastUpdated)
+            ? session.lastUpdated
+            : null,
         schemaVersion: Number.isFinite(session.schemaVersion)
             ? session.schemaVersion
             : SESSION_SCHEMA_VERSION,
@@ -57,14 +72,20 @@ function normalizeSession(session) {
             } else {
                 normalized.status = SESSION_STATUS.ABANDONED;
             }
-        } else if (normalized.elapsedSeconds > 0 || normalized.attemptCount > 0) {
+        } else if (
+            normalized.elapsedSeconds > 0 ||
+            normalized.attemptCount > 0
+        ) {
             normalized.status = SESSION_STATUS.ACTIVE;
         } else {
             normalized.status = SESSION_STATUS.IDLE;
         }
     }
 
-    if (!normalized.stopReason && TERMINAL_SESSION_STATUSES.includes(normalized.status)) {
+    if (
+        !normalized.stopReason &&
+        TERMINAL_SESSION_STATUSES.includes(normalized.status)
+    ) {
         if (normalized.status === SESSION_STATUS.COMPLETED) {
             normalized.stopReason = SESSION_STOP_REASONS.ACCEPTED;
         } else {
@@ -102,7 +123,7 @@ export function downloadBlob(blob, filename) {
 function createCsvValue(value) {
     if (value === null || value === undefined) return "";
     const str = String(value);
-    if (/[,"\n]/.test(str)) {
+    if (/[,"\r\n]/.test(str)) {
         return `"${str.replace(/"/g, '""')}"`;
     }
     return str;
