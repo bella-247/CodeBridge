@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Code Bridge - Dashboard</title>
+        <link rel="stylesheet" href="../styles.css" />
+        <link rel="stylesheet" href="dashboard.css" />
+    </head>
+    <body class="dashboard">
+        <div class="dashboard-shell">
+            <header class="dashboard-header">
+                <div class="header-copy">
+                    <div class="eyebrow">Performance</div>
+                    <h1>Dashboard</h1>
+                    <p class="subtitle">
+                        Tracking your growth, one problem at a time.
+                    </p>
+                </div>
+                <div class="header-actions">
+                    <label for="exportFormat">Export format</label>
+                    <select id="exportFormat" class="select-compact">
+                        <option value="json">Export JSON</option>
+                        <option value="csv">Export CSV</option>
+                    </select>
+                    <button id="exportBtn" class="btn secondary">
+                        Download
+                    </button>
+                    <button id="clearOldBtn" class="btn secondary">
+                        Clear Oldest
+                    </button>
+                    <button id="clearAllBtn" class="btn danger">
+                        Clear All
+                    </button>
+                </div>
+            </header>
+
+            <div
+                id="storageBanner"
+                class="storage-banner hidden"
+                role="alert"
+                aria-atomic="true"
+            >
+                <div>
+                    <strong>Storage nearing limit.</strong>
+                    Export your data or clear older sessions to keep analytics fresh.
+                </div>
+                <button id="bannerClearOldBtn" class="btn secondary small">
+                    Clear Oldest
+                </button>
+            </div>
+
+            <section class="filter-bar">
+                <div class="filter-group">
+                    <label for="filterPlatform">Platform</label>
+                    <select id="filterPlatform">
+                        <option value="all">All platforms</option>
+                        <option value="leetcode">LeetCode</option>
+                        <option value="codeforces">Codeforces</option>
+                        <option value="hackerrank">HackerRank</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filterRange">Time Range</label>
+                    <select id="filterRange">
+                        <option value="all">All time</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                        <option value="180">Last 180 days</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filterStatus">Status</label>
+                    <select id="filterStatus">
+                        <option value="all">Solved + Attempted</option>
+                        <option value="solved">Solved only</option>
+                        <option value="attempted">Attempted only</option>
+                    </select>
+                </div>
+            </section>
+
+            <section class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Solved Sessions</div>
+                    <div id="metricSolved" class="metric-value">—</div>
+                    <div id="metricSolvedSub" class="metric-sub">—</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Time</div>
+                    <div id="metricTime" class="metric-value">—</div>
+                    <div id="metricAvgTime" class="metric-sub">—</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Current Streak</div>
+                    <div id="metricStreak" class="metric-value">—</div>
+                    <div id="metricStreakSub" class="metric-sub">—</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Hardest Solved</div>
+                    <div id="metricHardest" class="metric-value">—</div>
+                    <div id="metricHardestSub" class="metric-sub">—</div>
+                </div>
+            </section>
+
+            <section class="grid-two">
+                <div class="chart-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Progress Over Time</div>
+                            <div class="card-subtitle">
+                                Weekly solved problems and time spent.
+                            </div>
+                        </div>
+                        <div class="toggle">
+                            <button
+                                class="toggle-btn is-active"
+                                data-mode="count"
+                                aria-pressed="true"
+                            >
+                                Problems
+                            </button>
+                            <button class="toggle-btn" data-mode="time" aria-pressed="false">
+                                Time
+                            </button>
+                        </div>
+                    </div>
+                    <div id="weeklyChart" class="chart-slot"></div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Difficulty Breakdown</div>
+                            <div class="card-subtitle">
+                                Distribution and average time per difficulty.
+                            </div>
+                        </div>
+                    </div>
+                    <div id="difficultyChart" class="bar-chart"></div>
+                    <div id="difficultyStats" class="stat-list"></div>
+                </div>
+            </section>
+
+            <section class="grid-two">
+                <div class="chart-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Platform Focus</div>
+                            <div class="card-subtitle">
+                                Where you spend most of your effort.
+                            </div>
+                        </div>
+                    </div>
+                    <div id="platformGrid" class="platform-grid"></div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Insights</div>
+                            <div class="card-subtitle">
+                                Small signals to guide your next moves.
+                            </div>
+                        </div>
+                    </div>
+                    <div id="insightsList" class="insight-list"></div>
+                </div>
+            </section>
+
+            <section class="chart-card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Recent Sessions</div>
+                        <div class="card-subtitle">
+                            Your latest solved attempts.
+                        </div>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Platform</th>
+                                <th scope="col">Problem</th>
+                                <th scope="col">Difficulty</th>
+                                <th scope="col">Time</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentTableBody">
+                            <tr>
+                                <td colspan="6" class="metric-sub" aria-live="polite" aria-atomic="true">
+                                    No sessions yet.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+        <script type="module" src="dashboard.js"></script>
+    </body>
+</html>

@@ -11,26 +11,36 @@ export function openSessionDb() {
         try {
             const request = indexedDB.open(SESSION_DB.NAME, SESSION_DB.VERSION);
 
-            request.onupgradeneeded = () => {
+            request.onupgradeneeded = (event) => {
                 const db = request.result;
+                const oldVersion = event.oldVersion || 0;
+                const tx = request.transaction;
+                if (!tx) return;
+
+                let store = null;
                 if (!db.objectStoreNames.contains(SESSION_DB.STORE)) {
-                    const store = db.createObjectStore(SESSION_DB.STORE, {
+                    store = db.createObjectStore(SESSION_DB.STORE, {
                         keyPath: "sessionId",
                     });
-                    store.createIndex("problemKey", "problemKey", {
-                        unique: false,
-                    });
-                    store.createIndex("platform", "platform", {
-                        unique: false,
-                    });
-                    store.createIndex("platformProblem", ["platform", "problemId"], {
-                        unique: false,
-                    });
-                    store.createIndex("status", "status", { unique: false });
-                    store.createIndex("endTime", "endTime", { unique: false });
-                    store.createIndex("lastUpdated", "lastUpdated", {
-                        unique: false,
-                    });
+                } else {
+                    store = tx.objectStore(SESSION_DB.STORE);
+                }
+
+                if (!store) return;
+
+                const ensureIndex = (name, keyPath) => {
+                    if (!store.indexNames.contains(name)) {
+                        store.createIndex(name, keyPath, { unique: false });
+                    }
+                };
+
+                if (oldVersion < 1) {
+                    ensureIndex("problemKey", "problemKey");
+                    ensureIndex("platform", "platform");
+                    ensureIndex("platformProblem", ["platform", "problemId"]);
+                    ensureIndex("status", "status");
+                    ensureIndex("endTime", "endTime");
+                    ensureIndex("lastUpdated", "lastUpdated");
                 }
             };
 
@@ -43,8 +53,17 @@ export function openSessionDb() {
                 resolve(db);
             };
 
+            request.onblocked = () => {
+                dbPromise = null;
+                reject(
+                    new Error("IndexedDB open blocked by another connection"),
+                );
+            };
+
             request.onerror = () => {
-                reject(request.error || new Error("Failed to open sessions DB"));
+                reject(
+                    request.error || new Error("Failed to open sessions DB"),
+                );
             };
         } catch (err) {
             reject(err);

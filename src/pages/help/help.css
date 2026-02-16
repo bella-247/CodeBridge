@@ -1,3 +1,7 @@
+:root {
+    --primary: #59d1ff;
+}
+
 body {
     width: 100vw;
     min-height: 100vh;
@@ -17,8 +21,6 @@ body {
     padding: 40px 20px;
     box-sizing: border-box;
     font-family: "Space Grotesk", "Segoe UI", "Helvetica Neue", sans-serif;
-    --primary: #59d1ff;
-    --accent: #ff7a59;
 }
 
 .help-container {
@@ -49,7 +51,7 @@ body {
     right: -20%;
     width: 200px;
     height: 200px;
-    background: var(--primary, #4fc3f7);
+    background: var(--primary, #59d1ff);
     opacity: 0.05;
     border-radius: 50%;
     filter: blur(80px);
@@ -96,7 +98,7 @@ body {
 }
 
 .step-num {
-    color: var(--primary, #4fc3f7);
+    color: var(--primary, #59d1ff);
     font-weight: 700;
     min-width: 20px;
 }
@@ -126,7 +128,6 @@ body {
 .feature-item p {
     margin: 0;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.6);
 }
 
 code {
@@ -150,5 +151,12 @@ code {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .platform-card {
+        animation: none;
+        transition: none;
     }
 }

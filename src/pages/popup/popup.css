@@ -5,6 +5,18 @@ body {
     border-bottom-right-radius: 2rem;
 }
 
+.header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.dashboard-btn {
+    text-decoration: none;
+    white-space: nowrap;
+}
+
 #workflowPanel {
     display: flex;
     flex-direction: column;

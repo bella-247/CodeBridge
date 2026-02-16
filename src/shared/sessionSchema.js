@@ -22,6 +22,7 @@ export const SESSION_STATUS = Object.freeze({
     SWITCHED: "SWITCHED",
 });
 
+// Stop reason values are persisted in storage/exports; keep lowercase for backward compatibility.
 export const SESSION_STOP_REASONS = Object.freeze({
     ACCEPTED: "accepted",
     MANUAL: "manual",

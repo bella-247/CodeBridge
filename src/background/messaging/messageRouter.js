@@ -18,6 +18,7 @@ import {
     handleGetSessions,
     handleGetSession,
     handleClearSessions,
+    handleTrimSessions,
 } from "../session/eventRouter.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -418,6 +419,10 @@ export function registerMessageHandlers() {
 
                     case "clearSessions":
                         sendResponse(await handleClearSessions());
+                        break;
+
+                    case "trimSessions":
+                        sendResponse(await handleTrimSessions(message));
                         break;
 
                     default:

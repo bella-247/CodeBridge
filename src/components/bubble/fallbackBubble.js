@@ -13,6 +13,16 @@ function injectFallbackBubble() {
         if (window.__cb_bubble_hidden) return false;
         if (document.getElementById("lcgh-bubble")) return false;
 
+        function getAllowedPostMessageOrigin() {
+            const origin = window.location && window.location.origin;
+            if (typeof origin !== "string" || !origin || origin === "null") {
+                return null;
+            }
+            return origin.startsWith("http://") || origin.startsWith("https://")
+                ? origin
+                : null;
+        }
+
         // Minimal styles
         const existing = document.getElementById("lcgh-styles-inline");
         if (!existing) {
@@ -58,7 +68,12 @@ function injectFallbackBubble() {
         wrapper.addEventListener("click", () => {
             try {
                 console.log("lcgh: fallback-bubble clicked");
-                window.postMessage({ lcghAction: "bubbleClicked" }, "*");
+                const targetOrigin = getAllowedPostMessageOrigin();
+                if (!targetOrigin) {
+                    console.log("lcgh: fallback-bubble blocked due to unsafe origin");
+                    return;
+                }
+                window.postMessage({ lcghAction: "bubbleClicked" }, targetOrigin);
             } catch (e) { }
         });
 

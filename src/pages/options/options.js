@@ -4,6 +4,11 @@
 
 import { SUPPORTED_PLATFORMS } from "../../utils/constants.js";
 import { SESSION_DEFAULTS } from "../../shared/sessionDefaults.js";
+import {
+    buildUserDataPayload,
+    downloadBlob,
+    sessionsToCsv,
+} from "../../analytics/exporters.js";
 
 const $ = (id) => document.getElementById(id);
 const SETTINGS_EXPORT_KEYS = new Set([
@@ -23,13 +28,9 @@ const SETTINGS_EXPORT_KEYS = new Set([
     ...Object.keys(SESSION_DEFAULTS),
 ]);
 
-const EXCLUDED_EXPORT_KEYS = new Set(["github_token", "device_flow_state"]);
-
 const SETTINGS_EXPORT_FORMAT = "codebridge-settings";
 const SETTINGS_EXPORT_VERSION = 1;
-
-const USER_DATA_EXPORT_FORMAT = "codebridge-user-data";
-const USER_DATA_EXPORT_VERSION = 1;
+const EXCLUDED_SETTINGS_KEYS = ["github_token", "device_flow_state"];
 
 function updateDelayedAutoLabel() {
     const option = document.querySelector(
@@ -425,7 +426,7 @@ async function importSettings() {
     }
 
     const sanitized = { ...settingsPayload };
-    EXCLUDED_EXPORT_KEYS.forEach((key) => {
+    EXCLUDED_SETTINGS_KEYS.forEach((key) => {
         if (key in sanitized) {
             delete sanitized[key];
         }
@@ -439,68 +440,6 @@ async function importSettings() {
     await new Promise((resolve) => chrome.storage.local.set(toSave, resolve));
     loadOptions();
     setStatus("Settings imported.", "accent");
-}
-
-function createCsvValue(value) {
-    if (value === null || value === undefined) return "";
-    const str = String(value);
-    if (/[,"\n]/.test(str)) {
-        return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-}
-
-function secondsToIso(seconds) {
-    if (!Number.isFinite(seconds)) return "";
-    try {
-        return new Date(seconds * 1000).toISOString();
-    } catch (e) {
-        return "";
-    }
-}
-
-function sessionsToCsv(sessions) {
-    const columns = [
-        "sessionId",
-        "platform",
-        "problemId",
-        "difficulty",
-        "status",
-        "stopReason",
-        "verdict",
-        "language",
-        "attemptCount",
-        "elapsedSeconds",
-        "startTime",
-        "endTime",
-        "firstSeen",
-        "lastSeen",
-        "lastUpdated",
-        "problemKey",
-        "schemaVersion",
-    ];
-
-    const timeColumns = new Set([
-        "startTime",
-        "endTime",
-        "firstSeen",
-        "lastSeen",
-        "lastUpdated",
-    ]);
-
-    const rows = sessions.map((session) => {
-        return columns
-            .map((key) => {
-                const value = session ? session[key] : "";
-                if (timeColumns.has(key)) {
-                    return createCsvValue(secondsToIso(value));
-                }
-                return createCsvValue(value);
-            })
-            .join(",");
-    });
-
-    return [columns.join(","), ...rows].join("\n");
 }
 
 async function exportUserData() {
@@ -517,31 +456,16 @@ async function exportUserData() {
     if (format === "csv") {
         const csv = sessionsToCsv(sessions);
         const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = `codebridge-user-data-${dateTag}.csv`;
-        anchor.click();
-        setTimeout(() => URL.revokeObjectURL(url), 800);
+        downloadBlob(blob, `codebridge-user-data-${dateTag}.csv`);
         setStatus("User data exported (CSV).", "accent");
         return;
     }
 
-    const payload = {
-        format: USER_DATA_EXPORT_FORMAT,
-        version: USER_DATA_EXPORT_VERSION,
-        exportedAt: new Date().toISOString(),
-        sessions,
-    };
+    const payload = buildUserDataPayload(sessions);
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: "application/json",
     });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `codebridge-user-data-${dateTag}.json`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 800);
+    downloadBlob(blob, `codebridge-user-data-${dateTag}.json`);
     setStatus("User data exported (JSON).", "accent");
 }
 
@@ -551,7 +475,17 @@ async function clearExtensionStorage() {
     ) {
         return;
     }
-    await sendMessage("clearSessions");
+    try {
+        const resp = await sendMessage("clearSessions");
+        if (!resp || !resp.success) {
+            alert(resp && resp.message ? resp.message : "Failed to clear sessions.");
+            return;
+        }
+    } catch (err) {
+        alert(err && err.message ? err.message : "Failed to clear sessions.");
+        return;
+    }
+
     chrome.storage.local.clear(() => {
         alert("Storage cleared.");
         location.reload();

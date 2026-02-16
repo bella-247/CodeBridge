@@ -7,6 +7,7 @@ body {
     width: 100%;
     min-height: 100vh;
     padding: 20px;
+    box-sizing: border-box;
 }
 
 /* Container for everything */
@@ -30,7 +31,7 @@ header .muted {
 .section-title {
     font-size: 1rem;
     font-weight: 700;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-muted);
     text-transform: uppercase;
     margin: 20px 0 8px 0;
 }
@@ -90,7 +91,7 @@ header .muted {
 /* Variables guide under textarea */
 .vars-guide {
     font-size: 11px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-muted);
     background: rgba(255, 255, 255, 0.05);
     padding: 8px 10px;
     border-radius: 8px;
@@ -98,7 +99,7 @@ header .muted {
 
 .vars-guide code {
     background: none;
-    color: #6366f1;
+    color: var(--accent);
     font-family: "JetBrains Mono", monospace;
 }
 

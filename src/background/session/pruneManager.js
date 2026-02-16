@@ -57,3 +57,39 @@ export async function pruneSessions() {
 
     return { removed: removedIds.length, kept: keepIds.size };
 }
+
+export async function trimSessionsToCount(maxSessions) {
+    const limit =
+        Number.isFinite(maxSessions) && Number.isInteger(maxSessions) && maxSessions >= 0
+            ? maxSessions
+            : 1000;
+    const sessions = await getAllSessions();
+
+    if (!sessions.length) {
+        return { removed: 0, kept: 0 };
+    }
+
+    const active = sessions.filter((s) => s && isActiveStatus(inferStatus(s)));
+    const completed = sessions.filter(
+        (s) => s && TERMINAL_SESSION_STATUSES.includes(inferStatus(s)),
+    );
+
+    const allowedCompletedCount = Math.max(0, limit - active.length);
+
+    completed.sort((a, b) => getSortTimestamp(b) - getSortTimestamp(a));
+    const trimmedCompleted = completed.slice(0, allowedCompletedCount);
+
+    const keepIds = new Set(
+        [...active, ...trimmedCompleted].map((session) => session.sessionId),
+    );
+
+    const removedIds = sessions
+        .filter((session) => session && !keepIds.has(session.sessionId))
+        .map((session) => session.sessionId);
+
+    if (removedIds.length) {
+        await deleteSessionsByIds(removedIds);
+    }
+
+    return { removed: removedIds.length, kept: keepIds.size };
+}

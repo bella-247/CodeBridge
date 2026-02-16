@@ -1,5 +1,28 @@
 import { $ } from "./popupDom.js";
 
+let storageListenerRegistered = false;
+let applySettingsRef = null;
+
+function handleStorageChange(changes, area) {
+    if (area !== "local" || !applySettingsRef) return;
+    if (
+        changes.github_owner ||
+        changes.github_repo ||
+        changes.github_branch ||
+        changes.allowUpdateDefault
+    ) {
+        chrome.storage.local.get(
+            [
+                "github_owner",
+                "github_repo",
+                "github_branch",
+                "allowUpdateDefault",
+            ],
+            (items) => applySettingsRef(items),
+        );
+    }
+}
+
 export function createSettings({ state, ui, getFormValues, actions }) {
     let saveTimer = null;
 
@@ -96,25 +119,11 @@ export function createSettings({ state, ui, getFormValues, actions }) {
             },
         );
 
-        chrome.storage.onChanged.addListener((changes, area) => {
-            if (area !== "local") return;
-            if (
-                changes.github_owner ||
-                changes.github_repo ||
-                changes.github_branch ||
-                changes.allowUpdateDefault
-            ) {
-                chrome.storage.local.get(
-                    [
-                        "github_owner",
-                        "github_repo",
-                        "github_branch",
-                        "allowUpdateDefault",
-                    ],
-                    (items) => applySettings(items),
-                );
-            }
-        });
+        applySettingsRef = applySettings;
+        if (!storageListenerRegistered) {
+            chrome.storage.onChanged.addListener(handleStorageChange);
+            storageListenerRegistered = true;
+        }
     }
 
     return { init };
