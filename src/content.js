@@ -116,14 +116,149 @@
         return prefix ? `${prefix}-${name}` : name;
     }
 
+    function isElementVisible(el) {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        if (
+            style.display === "none" ||
+            style.visibility === "hidden" ||
+            style.opacity === "0"
+        ) {
+            return false;
+        }
+        return !!(el.getClientRects && el.getClientRects().length);
+    }
+
+    function readCodeTextFromElement(el) {
+        if (!el) return "";
+
+        const lineItems = el.querySelectorAll(
+            "ol.linenums > li, ul.linenums > li, .linenums li",
+        );
+        if (lineItems && lineItems.length) {
+            return Array.from(lineItems)
+                .map((li) =>
+                    (li.textContent || "")
+                        .replace(/\u00a0/g, " ")
+                        .replace(/\r\n/g, "\n")
+                        .replace(/\r/g, "\n"),
+                )
+                .join("\n");
+        }
+
+        const textContent = typeof el.textContent === "string" ? el.textContent : "";
+        const innerText =
+            typeof el.innerText === "string" ? el.innerText : "";
+
+        const hasLineBreaks = /\r|\n/.test(textContent);
+        const raw = hasLineBreaks
+            ? textContent
+            : innerText && innerText.trim().length
+                ? innerText
+                : textContent;
+
+        return raw
+            .replace(/\u00a0/g, " ")
+            .replace(/\r\n/g, "\n")
+            .replace(/\r/g, "\n");
+    }
+
+    function extractCodeforcesDialogFromDom() {
+        try {
+            const dialogRoot =
+                document.querySelector("#facebox") ||
+                document.querySelector(".facebox");
+            if (!dialogRoot || !isElementVisible(dialogRoot)) return null;
+
+            const root = dialogRoot.querySelector(".content") || dialogRoot;
+            const candidates = [];
+            const primary =
+                root.querySelector("#program-source-text") ||
+                root.querySelector("pre.prettyprint");
+            if (primary) candidates.push(primary);
+
+            const pres = Array.from(root.querySelectorAll("pre"));
+            for (const pre of pres) {
+                if (!candidates.includes(pre)) candidates.push(pre);
+            }
+
+            let best = null;
+            for (const el of candidates) {
+                const text = readCodeTextFromElement(el);
+                if (!text.trim()) continue;
+                if (!best || text.length > best.text.length) {
+                    best = { el, text };
+                }
+            }
+
+            if (!best) return null;
+
+            let language = "";
+            const infoRows = root.querySelectorAll("table tr");
+            for (const row of infoRows) {
+                const cells = row.getElementsByTagName("td");
+                if (cells.length > 1) {
+                    const label = cells[0].innerText
+                        .trim()
+                        .toLowerCase()
+                        .replace(/:$/, "");
+                    if (
+                        label === "lang" ||
+                        label === "language" ||
+                        label.includes("language") ||
+                        label.includes("язык")
+                    ) {
+                        language = cells[1].innerText.trim();
+                        break;
+                    }
+                }
+            }
+
+            let submissionUrl = "";
+            const submissionLink = root.querySelector(
+                'a[href*="/submission/"]',
+            );
+            if (submissionLink && submissionLink.getAttribute("href")) {
+                try {
+                    submissionUrl = new URL(
+                        submissionLink.getAttribute("href"),
+                        location.origin,
+                    ).href;
+                } catch (e) {}
+            }
+
+            let problemUrl = "";
+            const problemLink =
+                root.querySelector('a[href*="/problemset/problem/"]') ||
+                root.querySelector('a[href*="/contest/"][href*="/problem/"]') ||
+                root.querySelector('a[href*="/gym/"][href*="/problem/"]') ||
+                root.querySelector('a[href*="/problem/"]');
+            if (problemLink && problemLink.getAttribute("href")) {
+                try {
+                    problemUrl = new URL(
+                        problemLink.getAttribute("href"),
+                        location.origin,
+                    ).href;
+                } catch (e) {}
+            }
+
+            return {
+                code: best.text,
+                language,
+                submissionUrl,
+                problemUrl,
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
     function extractCodeforcesSubmissionFromDom() {
         try {
             const codeEl =
                 document.querySelector("#program-source-text") ||
                 document.querySelector("pre.prettyprint");
-            let code = codeEl
-                ? (codeEl.textContent || "").replace(/\u00a0/g, " ")
-                : "";
+            let code = codeEl ? readCodeTextFromElement(codeEl) : "";
 
             let language = "";
             const infoRows = document.querySelectorAll(".datatable table tr");
@@ -231,6 +366,19 @@
                 (location.pathname.includes("/submission/") ||
                     document.querySelector("#program-source-text"));
 
+            if (isCodeforces && !isCfSubmissionPage) {
+                const dialogRes = extractCodeforcesDialogFromDom();
+                if (dialogRes && dialogRes.code && dialogRes.code.trim()) {
+                    code = dialogRes.code;
+                    codeSource = "dialog";
+                    if (dialogRes.language) data.language = dialogRes.language;
+                    if (dialogRes.submissionUrl)
+                        data.submissionUrl = dialogRes.submissionUrl;
+                    if (dialogRes.problemUrl && !data.url)
+                        data.url = dialogRes.problemUrl;
+                }
+            }
+
             if (isCfSubmissionPage) {
                 if (!code.trim()) {
                     const domRes = extractCodeforcesSubmissionFromDom();
@@ -309,7 +457,7 @@
                 normalizedLanguage: normLang,
                 suggestedExtension: extWithDot,
                 extension: extWithDot.replace(/^\./, ""),
-                url: location.href,
+                url: data.url || location.href,
                 folderName: folderName,
                 codeSource: codeSource || (code && code.trim() ? "editor" : ""),
                 isSubmissionPage: !!data.isSubmissionPage,

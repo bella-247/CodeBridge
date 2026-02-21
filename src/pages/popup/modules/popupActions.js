@@ -42,7 +42,7 @@ export function createActions({ state, ui, getFormValues }) {
         if (data.code && data.code.trim()) return;
 
         ui.updateStatus(
-            "Open your accepted submission page and reopen the popup.",
+            "Open your accepted submission dialog (or page) and reopen the popup.",
         );
 
         const skipPrompt = await getSkipSubmissionPromptSetting();

@@ -11,6 +11,47 @@ export const CodeforcesAdapter = {
     matches: () => location.hostname.includes("codeforces.com"),
 
     /**
+     * Checks visibility for dialog containers (Codeforces facebox).
+     */
+    isElementVisible(el) {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        if (
+            style.display === "none" ||
+            style.visibility === "hidden" ||
+            style.opacity === "0"
+        ) {
+            return false;
+        }
+        return !!(el.getClientRects && el.getClientRects().length);
+    },
+
+    /**
+     * Attempts to read the problem link from the open Codeforces dialog.
+     */
+    getProblemUrlFromDialog() {
+        try {
+            const dialog =
+                document.querySelector("#facebox") ||
+                document.querySelector(".facebox");
+            if (!dialog || !this.isElementVisible(dialog)) return null;
+
+            const root = dialog.querySelector(".content") || dialog;
+            const link =
+                root.querySelector('a[href*="/problemset/problem/"]') ||
+                root.querySelector('a[href*="/contest/"][href*="/problem/"]') ||
+                root.querySelector('a[href*="/gym/"][href*="/problem/"]') ||
+                root.querySelector('a[href*="/problem/"]');
+            if (link && link.getAttribute("href")) {
+                return new URL(link.getAttribute("href"), location.origin).href;
+            }
+        } catch (e) {
+            // ignore
+        }
+        return null;
+    },
+
+    /**
      * Finds the currently logged-in user handle on Codeforces.
      */
     getHandle() {
@@ -157,8 +198,15 @@ export const CodeforcesAdapter = {
             const isSubmissionPage =
                 location.pathname.includes("/submission/") ||
                 document.querySelector("#program-source-text");
-            if (isSubmissionPage) {
-                const problemUrl = this.getProblemUrlFromSubmissionPage();
+
+            const hasProblemStatement = !!document.querySelector(
+                ".problem-statement",
+            );
+            if (isSubmissionPage || !hasProblemStatement) {
+                const problemUrl = isSubmissionPage
+                    ? this.getProblemUrlFromSubmissionPage()
+                    : this.getProblemUrlFromDialog() ||
+                      this.getProblemUrlFromSubmissionPage();
                 if (problemUrl) {
                     try {
                         const res = await fetch(problemUrl, {
@@ -175,10 +223,11 @@ export const CodeforcesAdapter = {
                                 doc,
                                 problemUrl,
                             );
+                            if (metadata) metadata.url = problemUrl;
                         }
                     } catch (e) {
                         console.warn(
-                            "[CodeBridge] Failed to fetch problem page from submission. Falling back.",
+                            "[CodeBridge] Failed to fetch problem page from submission/dialog. Falling back.",
                         );
                     }
                 }

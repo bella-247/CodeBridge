@@ -264,7 +264,7 @@ export function createUi(state) {
             const body = document.createElement("div");
             body.className = "cb-modal-body";
             body.textContent =
-                "Codeforces only exposes accepted code on the submission page. Open your accepted submission, then reopen the popup.";
+                "Codeforces only exposes accepted code in the submission view. Open the submission dialog (from the #/Source link) or the full submission page, then reopen the popup.";
 
             const checkboxWrap = document.createElement("label");
             checkboxWrap.className = "cb-modal-checkbox";
