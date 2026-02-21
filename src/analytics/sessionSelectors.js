@@ -19,10 +19,11 @@ function isTerminalSession(session) {
     const stopReason = session.stopReason
         ? String(session.stopReason).toLowerCase()
         : "";
-    return (
-        TERMINAL_SESSION_STATUSES.includes(status) ||
-        TERMINAL_STOP_REASONS.has(stopReason)
-    );
+    const statusMatches =
+        typeof TERMINAL_SESSION_STATUSES.has === "function"
+            ? TERMINAL_SESSION_STATUSES.has(status)
+            : TERMINAL_SESSION_STATUSES.includes(status);
+    return statusMatches || TERMINAL_STOP_REASONS.has(stopReason);
 }
 
 export function getSessionEndSeconds(session) {
